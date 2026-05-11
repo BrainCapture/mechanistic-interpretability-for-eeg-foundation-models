@@ -398,18 +398,10 @@ def sidebar():
 
     # ── Data-availability filter ──────────────────────────────────────
     # By default, hide configurations that have no app_cache.pt — most
-    # tabs are uninteresting without it. The toggle lets power users opt
-    # into exploring every SAE checkpoint on disk.
-    only_with_cache = st.sidebar.toggle(
-        "Only configs with data",
-        value=True,
-        help=(
-            "When on, the selectors below only show (encoder, expansion, "
-            "layer, sparsity) combinations that have a precomputed "
-            "`app_cache.pt`. Turn off to see every trained SAE."
-        ),
-        key="filter_with_cache",
-    )
+    # tabs are uninteresting without it. The actual toggle widget is
+    # rendered at the bottom of the sidebar under "Advanced" so reviewers
+    # see the model selectors first; we read its persisted state here.
+    only_with_cache = st.session_state.get("filter_with_cache", True)
 
     def _filter_runs(src: dict) -> dict:
         if not only_with_cache:
@@ -598,6 +590,20 @@ def sidebar():
         key="page_nav",
     )
 
+    # ── Advanced (data-availability filter) ────────────────────────────
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("Advanced"):
+        st.toggle(
+            "Only configs with data",
+            value=True,
+            help=(
+                "When on, the selectors above only show (encoder, expansion, "
+                "layer, sparsity) combinations that have a precomputed "
+                "`app_cache.pt`. Turn off to see every trained SAE on disk."
+            ),
+            key="filter_with_cache",
+        )
+
     # ── Version ───────────────────────────────────────────────────────
     try:
         import tomllib
@@ -642,48 +648,36 @@ def page_home() -> None:
 
     st.divider()
 
-    # ── Feature overview cards ─────────────────────────────────────────────────
-    st.subheader("App features")
+    # ── Reading the paper alongside the app ──────────────────────────────────
+    st.subheader("Reading the paper alongside the app")
+    st.markdown(
+        "Each tab below corresponds to a section or figure of the paper. The sidebar "
+        "drives all tabs: pick a model + expansion + layer, and every tab updates."
+    )
 
-    cards = [
-        ("Feature Explorer", "Inspect individual SAE features: spectral profile, fire rate, label correlation, co-activations, and gradient-ascent prototypes.", "SAE checkpoint"),
-        ("Layer Explorer", "Animated UMAP across encoder layers — watch representations evolve with depth.", "Layer UMAP cache"),
-        ("TCAV Explorer", "Concept Activation Vectors: measure how much each clinical concept (EEG band, abnormality, demographics) influences the model's internal space.", "App cache + TCAV cache"),
-        ("Demographics Explorer", "SAE feature firing-rate enrichment across demographic and clinical groups — subject-level Mann-Whitney U with BH FDR correction.", "App cache"),
-        ("Concept Steering", "Zero out SAE features encoding a demographic concept and measure whether that concept becomes undecodable from the reconstructed EEG.", "App cache + SAE checkpoint"),
-        ("Attention Explorer", "Inspect transformer self-attention maps alongside SAE feature activations for individual 60-second windows.", "App cache"),
-        ("SAE Analysis", "Hyperparameter sweep (R² / dead-neuron heatmaps) and feature taxonomy — three-way classification of SAE features as separable, entangled, or spurious.", ""),
+    tabs_map = [
+        ("Feature Explorer",      "§3.1",       "Per-feature spectral signatures via the spectral decoder"),
+        ("Layer Explorer",        "§3",         "Animated joint UMAP showing token trajectories across encoder layers"),
+        ("SAE Analysis",          "§3.2 · Fig 2 + §3.3 · Fig 3", "Layer-sweep faithfulness and the three-way feature taxonomy"),
+        ("TCAV Explorer",         "§4 · Fig 4", "Concept attribution via Testing with Concept Activation Vectors"),
+        ("Demographics Explorer", "§4",         "Feature firing-rate enrichment across demographic / clinical groups"),
+        ("Concept Steering",      "§5–6 · Figs 4 / 5 / 6", "Clamping concept-aligned features to the target centroid"),
+        ("Attention Explorer",    "supplementary", "Encoder self-attention alongside SAE features (not in paper)"),
     ]
 
-    cols_per_row = 3
-    for row_start in range(0, len(cards), cols_per_row):
-        row = cards[row_start : row_start + cols_per_row]
-        cols = st.columns(len(row))
-        for col, (title, desc, req) in zip(cols, row):
-            with col:
-                if st.button(title, key=f"home_nav_{title}", use_container_width=True):
-                    st.session_state["_page_nav_pending"] = title
-                    st.rerun()
-                st.caption(desc)
+    for title, paper_ref, blurb in tabs_map:
+        cols = st.columns([0.30, 0.18, 0.52])
+        with cols[0]:
+            if st.button(title, key=f"home_nav_{title}", use_container_width=True):
+                st.session_state["_page_nav_pending"] = title
+                st.rerun()
+        cols[1].markdown(f"<span style='color:#888;font-size:0.85rem;'>{paper_ref}</span>", unsafe_allow_html=True)
+        cols[2].markdown(f"<span style='font-size:0.9rem;'>{blurb}</span>", unsafe_allow_html=True)
 
-    st.divider()
-
-    # ── Sidebar controls ───────────────────────────────────────────────────────
-    st.subheader("Sidebar — model selection")
-    st.markdown(
-        """
-| Control | What it does |
-|---------|-------------|
-| **Model pills** | Switch between encoder families: SleepFM, REVE, LaBraM |
-| **Expansion slider** | SAE dictionary size as a multiple of encoder embedding dim (1× to 128×, log-spaced). Drag along the line; only available `(model, E)` combinations are exposed |
-| **Layer dropdown** | Which transformer layer's representations the SAE was trained on. Available layers vary per model (SleepFM = 3 layers, LaBraM = 12, REVE = 22) |
-| **Sparsity slider** | Top-k sparsity as a percentage of total features. Higher % = more features active per token |
-| **Status dots** | Green = artifact exists on disk; orange = missing (build buttons appear in the relevant tab) |
-"""
-    )
-    st.info(
-        "The spectral decoder, app cache, and TCAV caches are built separately and may not exist for every "
-        "model/layer combination. Tabs that need them will show a build button when they are absent."
+    st.caption(
+        "Default selection is the paper's primary experiment: **SleepFM, E=1, layer 2**. "
+        "Caches (TCAV, attention, layer-UMAP) are pre-built for the canonical configurations; "
+        "tabs that require a missing cache show a clear build hint."
     )
 
     # ── Glossary ───────────────────────────────────────────────────────────────
@@ -713,16 +707,16 @@ def page_home() -> None:
 """
         )
 
-    # ── Pipeline overview ──────────────────────────────────────────────────────
-    with st.expander("Pipeline overview"):
+    # ── For developers: pipeline + how to add a new encoder ─────────────────
+    with st.expander("For developers — adding a new encoder"):
         st.markdown(
             """
 ```
-Frozen Encoder  →  SAE  →  spectral decoder  →  Token Codebook  →  App Cache  →  Streamlit app
-                                                                                            ↑
-                                                                             TCAV cache (run_tcav.py)
-                                                                             Layer UMAP (build_layer_umap_cache.py)
-                                                                             Feature prototypes (feature_maximization.py)
+Frozen Encoder  →  SAE  →  spectral decoder  →  App Cache  →  Streamlit app
+                                                                       ↑
+                                                       TCAV cache (run_tcav.py)
+                                                       Layer UMAP (build_layer_umap_cache.py)
+                                                       Feature prototypes (feature_maximization.py)
 ```
 
 **Run order for a new model** (replace `{ENCODER}` and `{L}` throughout):
@@ -849,6 +843,7 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
                   attn_cache: Optional[dict] = None) -> None:
     enc_label = _ENCODER_LABELS.get(data["encoder"], data["encoder"].upper())
     st.title("Feature Explorer")
+    st.caption("**Paper §3.1** — per-feature spectral signatures via the spectral decoder.")
     st.markdown(
         f"SAE features learned on **{enc_label} layer {data['layer']}** activations. "
         "Each feature is a direction in embedding space; its **spectral signature** "
@@ -1619,6 +1614,7 @@ def page_tcav_explorer(
     import pandas as pd
 
     st.title("TCAV Explorer")
+    st.caption("**Paper §4** — concept attribution via Testing with Concept Activation Vectors.")
     enc_label = _ENCODER_LABELS.get(data["encoder"], data["encoder"].upper())
     st.markdown(
         f"**Testing with Concept Activation Vectors** — {enc_label} layer {data['layer']}. "
@@ -3020,6 +3016,7 @@ def _render_taxonomy_tab(run_data: dict, folder_name: str) -> None:
 def page_sae_analysis(run_data: dict, folder_name: str) -> None:
     """SAE Analysis — hyperparameter sweep + feature taxonomy."""
     st.title("SAE Analysis")
+    st.caption("**Paper §3.2 · Figure 2** — SAE-faithfulness layer sweep and feature taxonomy (§3.3 · Figure 3).")
     tab_sweep, tab_taxonomy = st.tabs(["Hyperparameter Sweep", "Feature Taxonomy"])
     with tab_sweep:
         _render_sae_sweep_content(run_data, folder_name)
@@ -3030,6 +3027,7 @@ def page_sae_analysis(run_data: dict, folder_name: str) -> None:
 def page_layer_explorer(folder_name: str) -> None:
     """Layer Explorer — animated joint UMAP showing token trajectories across layers."""
     st.header("Layer Explorer")
+    st.caption("**Paper §3** — animated joint UMAP showing token trajectories across encoder layers.")
     st.caption(
         "Animated joint UMAP: the same tokens appear at every layer in a shared "
         "coordinate space, so you can see how representations evolve with depth.  "
@@ -3202,6 +3200,7 @@ def page_attention_explorer(
     layer: int,
 ) -> None:
     st.title("Attention Explorer")
+    st.caption("Supplementary — encoder self-attention alongside SAE features (not a paper figure).")
     st.markdown(
         "Inspect temporal self-attention from **transformer layer 0** alongside "
         "SAE feature activations for individual 60-second windows. "
@@ -3533,6 +3532,7 @@ def page_attention_explorer(
 
 def page_demographics(app_cache: Optional[dict], folder_name: str, layer: int) -> None:
     st.title("Demographics Explorer")
+    st.caption("**Paper §4** — SAE feature firing-rate enrichment across demographic and clinical groups.")
     st.caption(
         "SAE feature firing-rate enrichment across demographic and clinical groups · "
         "subject-level Mann-Whitney U · BH FDR correction"
@@ -4055,6 +4055,7 @@ def page_concept_steering(
     app_cache: Optional[dict], sae_path: str, folder_name: str, layer: int
 ) -> None:
     st.title("Concept Steering")
+    st.caption("**Paper §5, §6 · Figures 4 / 5 / 6** — clamping concept-aligned features to the target centroid.")
 
     tab_gallery, tab_interactive = st.tabs(["Results Gallery", "Interactive Clamping"])
 
