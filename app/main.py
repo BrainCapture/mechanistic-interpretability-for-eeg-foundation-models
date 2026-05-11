@@ -121,99 +121,116 @@ _EEG_BANDS = {
 # Checkpoint discovery
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _parse_encoder(folder_name: str) -> str:
-    if folder_name.startswith("reve"):
-        return "reve"
-    for v2_key in ("sleepfm_v2.0", "sleepfm_v2.1", "sleepfm_v2.3", "sleepfm_v2.4",
-                   "sleepfm_v2.5", "sleepfm_v2.6", "sleepfm_v2.7"):
-        if folder_name.startswith(v2_key):
-            return v2_key
-    return "sleepfm"
+# Map folder name -> base encoder. Only finetuned variants are listed.
+# `sleepfm_finetuned_local/` is the local re-training that holds the E=1 SAEs
+# referenced by the paper's primary `sleepfm_finetuned_layer*` experiments
+# (whose canonical `sleepfm_finetuned/` folder only ships the E>1 sweep).
+# Pretrained-dashboard folders (`sleepfm/`, `reve/`), `*_granular`, and
+# `sleepfm_v2.*` variants are intentionally absent.
+_ALLOWED_FOLDERS: Dict[str, str] = {
+    "sleepfm_finetuned":       "sleepfm",
+    "sleepfm_finetuned_local": "sleepfm",
+    "labram":                  "labram",
+    "reve_qjbe08":             "reve",
+}
+
+
+def _parse_sae_filename(stem: str) -> Optional[Tuple[float, int, int]]:
+    """Parse `sae_<encoder>_exp<E>_k<K>_layer<L>` → (expansion, layer, k).
+
+    Returns None if any field is missing or malformed.
+    """
+    try:
+        expansion = float(stem.split("_exp")[1].split("_")[0])
+        layer = int(stem.split("_layer")[1])
+        k_val = int(stem.split("_k")[1].split("_")[0])
+    except (IndexError, ValueError):
+        return None
+    return expansion, layer, k_val
+
+
+def _scan_experiment_metadata() -> Dict[Tuple[str, float, int, int], str]:
+    """Map (encoder, expansion, layer, k) → experiment name.
+
+    Walks `results/experiments/*/metadata.json` once and records each
+    one's (encoder × `sae_checkpoint`-parsed filename) tuple. Keyed by
+    the selection tuple rather than the absolute SAE path so the lookup
+    works whether the SAE lives in the canonical folder, in a re-training
+    folder like `sleepfm_finetuned_local/`, or has been moved.
+    """
+    out: Dict[Tuple[str, float, int, int], str] = {}
+    exp_root = ROOT / "results" / "experiments"
+    if not exp_root.exists():
+        return out
+    for exp_dir in sorted(exp_root.iterdir()):
+        if not exp_dir.is_dir():
+            continue
+        meta_path = exp_dir / "metadata.json"
+        if not meta_path.exists():
+            continue
+        try:
+            meta = json.loads(meta_path.read_text())
+            rel = meta.get("sae_checkpoint")
+            encoder = meta.get("encoder")
+            if not rel or not encoder:
+                continue
+            stem = Path(rel).stem
+            parsed = _parse_sae_filename(stem)
+            if parsed is None:
+                continue
+            E, L, K = parsed
+            out.setdefault((encoder, E, L, K), exp_dir.name)
+        except Exception:
+            continue
+    return out
 
 
 def discover_runs() -> Tuple[
-    Dict[str, Dict[str, Dict[int, Dict[int, Path]]]],
-    Dict[Tuple[str, str, int], str],
+    Dict[str, Dict[float, Dict[int, Dict[int, Path]]]],
+    Dict[Tuple[str, float, int, int], Optional[str]],
+    Dict[Tuple[str, float, int, int], str],
 ]:
-    """
-    Scan results/features/ and return all available SAE checkpoints.
+    """Scan `results/features/` and return all available SAE checkpoints.
 
     Returns
     -------
-    runs : {encoder: {variant: {layer: {k: sae_path}}}}
-    folder_for : {(encoder, variant, layer): folder_name}
+    runs        : {encoder: {expansion: {layer: {k: sae_path}}}}
+    exp_for     : {(encoder, expansion, layer, k): experiment_name or None}
+    folder_for  : {(encoder, expansion, layer, k): folder_name}
     """
-    features_root = ROOT / "results" / "features"
-    runs: Dict[str, Dict[str, Dict[int, Dict[int, Path]]]] = {}
-    folder_for: Dict[Tuple[str, str, int], str] = {}
+    runs: Dict[str, Dict[float, Dict[int, Dict[int, Path]]]] = {}
+    exp_for: Dict[Tuple[str, float, int, int], Optional[str]] = {}
+    folder_for: Dict[Tuple[str, float, int, int], str] = {}
 
+    features_root = ROOT / "results" / "features"
     if not features_root.exists():
-        return runs, folder_for
+        return runs, exp_for, folder_for
+
+    selection_to_exp = _scan_experiment_metadata()
 
     for folder in sorted(features_root.iterdir()):
-        if not folder.is_dir():
+        if not folder.is_dir() or folder.name not in _ALLOWED_FOLDERS:
             continue
-        ckpts = sorted(folder.glob("sae_*.pt"))
-        if not ckpts:
-            continue
-
-        encoder = _parse_encoder(folder.name)
-        tag: Optional[str] = None
-        encoder_weights: Optional[str] = None
-        try:
-            meta = torch.load(str(ckpts[0]), map_location="cpu", weights_only=False)
-            encoder         = meta.get("encoder", encoder)
-            tag             = meta.get("tag")
-            encoder_weights = meta.get("encoder_weights")
-        except Exception:
-            pass
-            
-        # Normalize encoder string if metadata had a variant name instead of base encoder
-        if encoder in ("sleepfm_granular", "sleepfm_finetuned", "sleepfm_pretrained"):
-            encoder = "sleepfm"
-
-        is_finetuned = (
-            "finetuned" in folder.name
-            or tag == "finetuned"
-            or (encoder_weights is not None and encoder_weights.endswith(".ckpt"))
-            or (tag is not None and tag not in ("pretrained", "base"))
-        )
-        is_granular = "granular" in folder.name or tag == "granular"
-        
-        if is_granular:
-            variant = "Finetuned on D4-v4 (Granular)"
-        elif is_finetuned:
-            variant = "Finetuned on D4-v3 (Binary)"
-        else:
-            variant = "Pretrained"
-
-        runs.setdefault(encoder, {}).setdefault(variant, {})
-
-        for ckpt in ckpts:
-            try:
-                layer = int(ckpt.stem.split("_layer")[1])
-            except (IndexError, ValueError):
+        encoder = _ALLOWED_FOLDERS[folder.name]
+        for ckpt in sorted(folder.glob("sae_*.pt")):
+            parsed = _parse_sae_filename(ckpt.stem)
+            if parsed is None:
                 continue
-            # Extract k from filename (e.g. sae_sleepfm_exp1.0_k8_layer2.pt → 8)
-            try:
-                k_val = int(ckpt.stem.split("_k")[1].split("_")[0])
-            except (IndexError, ValueError):
-                k_val = 0
-            runs[encoder][variant].setdefault(layer, {})
-            # First checkpoint wins; don't overwrite with a later one for the same (layer, k)
-            if k_val not in runs[encoder][variant][layer]:
-                runs[encoder][variant][layer][k_val] = ckpt
-                folder_for[(encoder, variant, layer)] = folder.name
+            expansion, layer, k_val = parsed
+            runs.setdefault(encoder, {}).setdefault(expansion, {}).setdefault(layer, {})
+            key = (encoder, expansion, layer, k_val)
+            if k_val not in runs[encoder][expansion][layer]:
+                runs[encoder][expansion][layer][k_val] = ckpt
+                exp_for[key] = selection_to_exp.get(key)
+                folder_for[key] = folder.name
 
-    # Sort layers and k values
+    # Sort each level
     for enc in runs:
-        for var in runs[enc]:
-            runs[enc][var] = {
-                layer: dict(sorted(ks.items()))
-                for layer, ks in sorted(runs[enc][var].items())
-            }
-
-    return runs, folder_for
+        runs[enc] = {
+            E: {layer: dict(sorted(ks.items())) for layer, ks in sorted(layers.items())}
+            for E, layers in sorted(runs[enc].items())
+        }
+    return runs, exp_for, folder_for
 
 
 def _spectral_decoder_path(folder_name: str) -> Optional[Path]:
@@ -224,23 +241,26 @@ def _spectral_decoder_path(folder_name: str) -> Optional[Path]:
     return next((p for p in candidates if p.exists()), None)
 
 
-def _app_cache_path(folder_name: str, layer: int) -> Optional[Path]:
-    """Return the app_cache.pt for this exact run+layer, or None."""
-    exp_name = f"{folder_name}_layer{layer}"
-    direct = ROOT / "results" / "experiments" / exp_name / "app_cache.pt"
-    return direct if direct.exists() else None
+def _app_cache_path(exp_name: Optional[str]) -> Optional[Path]:
+    """Return the app_cache.pt for the named experiment, or None."""
+    if not exp_name:
+        return None
+    p = ROOT / "results" / "experiments" / exp_name / "app_cache.pt"
+    return p if p.exists() else None
 
 
-def _tcav_cache_path(folder_name: str, layer: int) -> Optional[Path]:
-    """Return the tcav_cache.pt for this run+layer, or None."""
-    exp_name = f"{folder_name}_layer{layer}"
+def _tcav_cache_path(exp_name: Optional[str]) -> Optional[Path]:
+    """Return the tcav_cache.pt for the named experiment, or None."""
+    if not exp_name:
+        return None
     p = ROOT / "results" / "tcav" / exp_name / "tcav_cache.pt"
     return p if p.exists() else None
 
 
-def _attention_cache_path(folder_name: str, layer: int) -> Optional[Path]:
-    """Return the attention_cache.pt for this run+layer, or None."""
-    exp_name = f"{folder_name}_layer{layer}"
+def _attention_cache_path(exp_name: Optional[str]) -> Optional[Path]:
+    """Return the attention_cache.pt for the named experiment, or None."""
+    if not exp_name:
+        return None
     p = ROOT / "results" / "experiments" / exp_name / "attention_cache.pt"
     return p if p.exists() else None
 
@@ -370,63 +390,60 @@ def sidebar():
     st.sidebar.title("Mechanistic Interpretability for EEG Foundation Models")
     st.sidebar.markdown("---")
 
-    runs, folder_for = discover_runs()
+    runs, exp_for, folder_for = discover_runs()
     if not runs:
         st.sidebar.error("No SAE checkpoints found under results/features/")
         st.stop()
 
     # ── Encoder ───────────────────────────────────────────────────────
-    _VISIBLE_ENCODERS = {"sleepfm", "reve"}
-    enc_keys    = [e for e in sorted(runs.keys()) if e in _VISIBLE_ENCODERS]
-    _ENC_LABELS = {"sleepfm": "SleepFM", "reve": "REVE"}
-    enc_display = [_ENC_LABELS.get(e, e.upper()) for e in enc_keys]
-    _enc_default = "SleepFM" if "SleepFM" in enc_display else enc_display[0]
+    _ENC_LABELS = {"sleepfm": "SleepFM", "reve": "REVE", "labram": "LaBraM"}
+    _ENC_ORDER  = ["sleepfm", "labram", "reve"]
+    enc_keys    = [e for e in _ENC_ORDER if e in runs]
+    enc_display = [_ENC_LABELS[e] for e in enc_keys]
 
     st.sidebar.markdown("**Model**")
     enc_choice = st.sidebar.pills(
         "Model", enc_display,
-        default=_enc_default,
+        default=enc_display[0],
         label_visibility="collapsed",
         key="enc_pills",
     )
     encoder = enc_keys[enc_display.index(enc_choice)]
 
-    # ── Variant ───────────────────────────────────────────────────────
-    variants = sorted(runs[encoder].keys())
-    if "Finetuned on D4-v4 (Granular)" in variants:
-        _var_default = "Finetuned on D4-v4 (Granular)"
-    elif "Finetuned on D4-v3 (Binary)" in variants:
-        _var_default = "Finetuned on D4-v3 (Binary)"
-    elif "Finetuned" in variants:
-        _var_default = "Finetuned"
-    else:
-        _var_default = variants[0]
+    # ── Expansion ─────────────────────────────────────────────────────
+    expansions = sorted(runs[encoder].keys())
+    def _fmt_E(E: float) -> str:
+        return f"E={int(E)}" if float(E).is_integer() else f"E={E}"
+    E_display = [_fmt_E(E) for E in expansions]
+    # Default to E=1 if available, else the smallest expansion.
+    _E_default = _fmt_E(1.0) if 1.0 in expansions else E_display[0]
 
-    st.sidebar.markdown("**Variant**")
-    if len(variants) >= 2:
-        variant = st.sidebar.pills(
-            "Variant", variants,
-            default=_var_default,
+    st.sidebar.markdown("**Expansion**")
+    if len(expansions) >= 2:
+        E_choice = st.sidebar.pills(
+            "Expansion", E_display,
+            default=_E_default if _E_default in E_display else E_display[0],
             label_visibility="collapsed",
-            key="var_pills",
+            key="E_pills",
         )
+        expansion = expansions[E_display.index(E_choice)]
     else:
-        variant = variants[0]
-        st.sidebar.caption(f"Only **{variant}** available for {enc_choice}")
+        expansion = expansions[0]
+        st.sidebar.caption(f"Only {_fmt_E(expansion)} available for {enc_choice}")
 
     # ── Layer ─────────────────────────────────────────────────────────
-    layers = sorted(runs[encoder][variant].keys())
+    layers = sorted(runs[encoder][expansion].keys())
 
     st.sidebar.markdown("**Layer**")
     layer = st.sidebar.selectbox(
         "Layer", layers,
-        format_func=lambda l: f"Layer {l}",
+        format_func=lambda L: f"Layer {L}",
         label_visibility="collapsed",
         key="layer_sel",
     )
 
     # ── k (sparsity) ──────────────────────────────────────────────────
-    k_options = sorted(runs[encoder][variant][layer].keys())
+    k_options = sorted(runs[encoder][expansion][layer].keys())
     st.sidebar.markdown("**k**")
     if len(k_options) >= 2:
         k_sel = st.sidebar.pills(
@@ -439,41 +456,47 @@ def sidebar():
         k_sel = k_options[0]
         st.sidebar.caption(f"k = {k_sel}")
 
-    sae_path    = str(runs[encoder][variant][layer][k_sel])
-    folder_name = folder_for[(encoder, variant, layer)]
-    spectral_decoder_p       = _spectral_decoder_path(folder_name)
+    selection_key = (encoder, expansion, layer, k_sel)
+    sae_path    = str(runs[encoder][expansion][layer][k_sel])
+    folder_name = folder_for[selection_key]
+    exp_name    = exp_for[selection_key]
+    spectral_decoder_p = _spectral_decoder_path(folder_name)
 
     # ── Model overview ────────────────────────────────────────────────
     st.sidebar.markdown("---")
     try:
         meta      = torch.load(sae_path, map_location="cpu", weights_only=False)
-        expansion = meta.get("expansion", "?")
-        k_val     = meta.get("k", "?")
+        meta_E    = meta.get("expansion", expansion)
+        meta_k    = meta.get("k", k_sel)
         edim      = meta.get("embed_dim", "?")
         n_feat    = (
-            int(float(edim) * float(expansion))
-            if isinstance(edim, (int, float)) and isinstance(expansion, (int, float))
+            int(float(edim) * float(meta_E))
+            if isinstance(edim, (int, float)) and isinstance(meta_E, (int, float))
             else "?"
         )
     except Exception:
-        expansion = k_val = edim = n_feat = "?"
+        meta_E = expansion
+        meta_k = k_sel
+        edim = n_feat = "?"
 
-    exp_name = f"{folder_name}_layer{layer}"
-    st.sidebar.caption(f"`{exp_name}`")
+    if exp_name:
+        st.sidebar.caption(f"`{exp_name}`")
+    else:
+        st.sidebar.caption(f"`{folder_name}` (no experiment metadata)")
 
     ca, cb = st.sidebar.columns(2)
     ca.metric("Features",  f"{n_feat:,}" if isinstance(n_feat, int) else n_feat)
     cb.metric("Embed dim", str(edim))
     cc, cd = st.sidebar.columns(2)
-    cc.metric("Expansion", f"{expansion}×")
-    cd.metric("Top-k",     str(k_val))
+    cc.metric("Expansion", f"{meta_E}×")
+    cd.metric("Top-k",     str(meta_k))
 
     def _dot(ok: bool) -> str:
         return "🟢" if ok else "🟠"
 
-    has_cache = _app_cache_path(folder_name, layer) is not None
-    has_tcav  = _tcav_cache_path(folder_name, layer) is not None
-    has_attn  = _attention_cache_path(folder_name, layer) is not None
+    has_cache = _app_cache_path(exp_name) is not None
+    has_tcav  = _tcav_cache_path(exp_name) is not None
+    has_attn  = _attention_cache_path(exp_name) is not None
     st.sidebar.markdown(
         f"{_dot(spectral_decoder_p is not None)} spectral decoder &nbsp;&nbsp; "
         f"{_dot(has_cache)} Cache &nbsp;&nbsp; "
@@ -515,7 +538,15 @@ def sidebar():
     st.sidebar.markdown("---")
     st.sidebar.caption(f"v{_ver} · {_date}")
 
-    return sae_path, str(spectral_decoder_p) if spectral_decoder_p else None, folder_name, layer, variant, encoder, page
+    return (
+        sae_path,
+        str(spectral_decoder_p) if spectral_decoder_p else None,
+        folder_name,
+        exp_name,
+        layer,
+        encoder,
+        page,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -753,6 +784,7 @@ def _model_cards_content() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer: int,
+                  exp_name: Optional[str] = None,
                   attn_cache: Optional[dict] = None) -> None:
     enc_label = _ENCODER_LABELS.get(data["encoder"], data["encoder"].upper())
     st.title("Feature Explorer")
@@ -790,7 +822,7 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
 
     # Load TCAV cache early so abnormality score can be used as a sort key
     tcav_scores_per_feature: dict[int, float] = {}
-    _tcav_p = _tcav_cache_path(folder_name, layer) if folder_name else None
+    _tcav_p = _tcav_cache_path(exp_name) if folder_name else None
     if _tcav_p:
         try:
             _tc = load_tcav_cache(str(_tcav_p))
@@ -1521,6 +1553,7 @@ def page_tcav_explorer(
     layer: int,
     tcav_cache: Optional[dict],
     app_cache: Optional[dict],
+    exp_name: Optional[str] = None,
 ):
     import pandas as pd
 
@@ -2409,35 +2442,31 @@ def _scan_artefact_availability() -> list:
     rows: list = []
     if not features_root.exists():
         return rows
-    for folder in sorted(features_root.iterdir()):
-        if not folder.is_dir():
-            continue
-        ckpts = sorted(folder.glob("sae_*.pt"))
-        if not ckpts:
-            continue
-        enc = _parse_encoder(folder.name)
-        try:
-            meta = torch.load(str(ckpts[0]), map_location="cpu", weights_only=False)
-            enc = meta.get("encoder", enc)
-        except Exception:
-            pass
-        for ckpt in ckpts:
-            try:
-                layer = int(ckpt.stem.split("_layer")[1])
-            except (IndexError, ValueError):
-                continue
-            exp_name = f"{folder.name}_layer{layer}"
-            spectral_decoder_ok   = (spectral_decoder_root / folder.name / "spectral_decoder_checkpoint.pt").exists()
-            cache_ok = (exp_root / exp_name / "app_cache.pt").exists()
-            tcav_ok  = (tcav_root2 / exp_name / "tcav_cache.pt").exists()
-            rows.append({
-                "Encoder":   MODEL_CARDS.get(enc, {}).get("display_name", enc),
-                "Layer":     layer,
-                "SAE":       "✓",
-                "Spectral decoder":      "✓" if spectral_decoder_ok  else "—",
-                "App cache": "✓" if cache_ok else "—",
-                "TCAV":      "✓" if tcav_ok  else "—",
-            })
+    runs, exp_for, _ = discover_runs()
+    for enc in runs:
+        for E in runs[enc]:
+            for layer in runs[enc][E]:
+                for k_val in runs[enc][E][layer]:
+                    exp_name = exp_for.get((enc, E, layer, k_val))
+                    spectral_decoder_ok = (
+                        spectral_decoder_root / enc / "spectral_decoder_checkpoint.pt"
+                    ).exists()
+                    cache_ok = (
+                        exp_root / exp_name / "app_cache.pt"
+                    ).exists() if exp_name else False
+                    tcav_ok = (
+                        tcav_root2 / exp_name / "tcav_cache.pt"
+                    ).exists() if exp_name else False
+                    rows.append({
+                        "Encoder":   MODEL_CARDS.get(enc, {}).get("display_name", enc),
+                        "Expansion": int(E) if float(E).is_integer() else E,
+                        "Layer":     layer,
+                        "k":         k_val,
+                        "SAE":       "✓",
+                        "Spectral decoder": "✓" if spectral_decoder_ok else "—",
+                        "App cache":        "✓" if cache_ok else "—",
+                        "TCAV":             "✓" if tcav_ok else "—",
+                    })
     return rows
 
 
@@ -3481,7 +3510,7 @@ def page_attention_explorer(
     cc1, cc2, cc3 = st.columns([2, 2, 1])
 
     # Optionally load TCAV for sorted feature list
-    tcav_path = _tcav_cache_path(folder_name, layer)
+    tcav_path = _tcav_cache_path(exp_name)
     tcav_cache = load_tcav_cache(str(tcav_path)) if tcav_path else None
 
     feat_labels: list[str] = []
@@ -4591,7 +4620,7 @@ def _page_concept_steering_interactive(
 def main():
     if "_page_nav_pending" in st.session_state:
         st.session_state["page_nav"] = st.session_state.pop("_page_nav_pending")
-    sae_path, spectral_decoder_path, folder_name, layer, variant, encoder, page = sidebar()
+    sae_path, spectral_decoder_path, folder_name, exp_name, layer, encoder, page = sidebar()
 
     if page == "Home":
         page_home()
@@ -4599,9 +4628,9 @@ def main():
 
     if page == "Feature Explorer":
         run_data   = load_run_data(sae_path, spectral_decoder_path)
-        app_cache  = load_app_cache(str(p)) if (p := _app_cache_path(folder_name, layer)) else None
-        attn_cache = load_attention_cache(str(p)) if (p := _attention_cache_path(folder_name, layer)) else None
-        page_features(run_data, app_cache, folder_name, layer, attn_cache=attn_cache)
+        app_cache  = load_app_cache(str(p)) if (p := _app_cache_path(exp_name)) else None
+        attn_cache = load_attention_cache(str(p)) if (p := _attention_cache_path(exp_name)) else None
+        page_features(run_data, app_cache, folder_name, layer, exp_name=exp_name, attn_cache=attn_cache)
         return
 
 
@@ -4612,24 +4641,24 @@ def main():
 
     if page == "TCAV Explorer":
         run_data  = load_run_data(sae_path, spectral_decoder_path)
-        app_cache = load_app_cache(str(p)) if (p := _app_cache_path(folder_name, layer)) else None
-        tcav_cache = load_tcav_cache(str(p)) if (p := _tcav_cache_path(folder_name, layer)) else None
-        page_tcav_explorer(run_data, folder_name, layer, tcav_cache, app_cache)
+        app_cache = load_app_cache(str(p)) if (p := _app_cache_path(exp_name)) else None
+        tcav_cache = load_tcav_cache(str(p)) if (p := _tcav_cache_path(exp_name)) else None
+        page_tcav_explorer(run_data, folder_name, layer, tcav_cache, app_cache, exp_name=exp_name)
         return
 
     if page == "Demographics Explorer":
-        app_cache = load_app_cache(str(p)) if (p := _app_cache_path(folder_name, layer)) else None
+        app_cache = load_app_cache(str(p)) if (p := _app_cache_path(exp_name)) else None
         page_demographics(app_cache, folder_name, layer)
         return
 
     if page == "Concept Steering":
-        app_cache = load_app_cache(str(p)) if (p := _app_cache_path(folder_name, layer)) else None
+        app_cache = load_app_cache(str(p)) if (p := _app_cache_path(exp_name)) else None
         page_concept_steering(app_cache, sae_path, folder_name, layer)
         return
 
     if page == "Attention Explorer":
         run_data   = load_run_data(sae_path, spectral_decoder_path)
-        attn_cache = load_attention_cache(str(p)) if (p := _attention_cache_path(folder_name, layer)) else None
+        attn_cache = load_attention_cache(str(p)) if (p := _attention_cache_path(exp_name)) else None
         page_attention_explorer(run_data, attn_cache, folder_name, layer)
         return
 
