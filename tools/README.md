@@ -2,7 +2,7 @@
 
 The minimum-viable set of scripts that produces every result in the paper. Pruned from the development repo to keep this companion repo focused on the paper's methodology.
 
-The pipeline is sequential — later steps depend on outputs from earlier steps. None of these scripts will run end-to-end here because the BrainCapture EEG dataset and fine-tuned encoder weights are private; the scripts are included so the methodology is auditable, and so researchers porting the pipeline to their own corpus have a clear starting point.
+The pipeline is sequential — later steps depend on outputs from earlier steps. None of these scripts will run end-to-end here because the clinical EEG dataset and fine-tuned encoder weights used in the paper are private; the scripts are included so the methodology is auditable, and so researchers porting the pipeline to their own corpus have a clear starting point.
 
 ## Pipeline overview
 

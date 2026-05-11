@@ -1,26 +1,23 @@
 # Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders
 
-Companion code repository for the preprint **"Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders"** by William Lehn-Schiøler, Magnus Ruud Kjær, Rahul Thapa, Magnus Guldberg Pedersen, Anton Storgaard Mosquera, Nick Williams, Andreas Brink-Kjær, Tue Lehn-Schiøler, Sándor Beniczky, Radu Gatej, Lars Kai Hansen, and Sadasivan Puthusserypady (BrainCapture A/S and collaborators).
+Companion code repository for the preprint **"Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders"**.
 
-The paper PDF, LaTeX source, and final figures are in [`paper/`](paper/).
-
-**Interactive demo:** <https://sae4eeg-app-506594542723.europe-west6.run.app/neurips-2026/>
+> Author identities and affiliations are withheld during anonymous review. The paper PDF, LaTeX source, and figures will be added back to `paper/` once the review process is complete.
 
 ## What this repo contains
 
 ```
 src/sae4eeg/          Core library: SAE, XAE, TCAV, encoder wrappers, dataset
 tools/                Analysis pipeline scripts (SAE/XAE/TCAV training, steering, probes)
-tools/paper_figures/  Scripts that generated every figure in the paper
-paper/                The submitted LaTeX package + compiled PDF
+tools/paper_figures/  Per-figure self-contained directories (plot.py + data + rendered figure)
 docs/                 Methodology notes (figure registry, cross-model plan)
 ```
 
 ## What this repo does *not* contain (and why)
 
-This repo is **not end-to-end reproducible**, by design. The components that would be required to retrain or rerun the pipeline are private to BrainCapture and cannot be released:
+This repo is **not end-to-end reproducible**, by design. The components that would be required to retrain or rerun the pipeline are private to the authors' institution and cannot be released:
 
-- **EEG data** — the BrainCapture clinical EEG dataset (~2,900 subjects) is not publicly available
+- **EEG data** — the clinical EEG dataset (~2,900 subjects) used in the paper is not publicly available
 - **Fine-tuned encoder weights** — the binary-finetuned SleepFM, REVE, and LaBraM checkpoints used in the paper are not released
 - **Pre-built result caches** — SAE/XAE checkpoints, TCAV caches, steering caches
 
@@ -28,7 +25,7 @@ This repo is **not end-to-end reproducible**, by design. The components that wou
 
 | Encoder | Source |
 |---|---|
-| SleepFM | Thapa et al., 2024 — see paper §3 for the repository link |
+| SleepFM | original SleepFM publication — see paper §3 for the citation and repository link |
 | REVE | <https://huggingface.co/brain-bzh/reve-base> (gated; requires EDPB agreement) |
 | LaBraM | Jiang et al., 2024 — see paper §3 for the repository link |
 
@@ -53,7 +50,7 @@ frozen encoder  →  SAE  →  XAE (spectral decoder)
 | 5. Compute monosemanticity taxonomy | `tools/analyze_monosemanticity.py` | per-experiment |
 | 6. Generate paper figures | `tools/paper_figures/Figure N/plot.py` | `tools/paper_figures/Figure N/figure.{png,pdf}` |
 
-Full pipeline documentation: `docs/paper_figures.md` (figure → script registry), `docs/concept_steering_cross_model_plan.md` (cross-model steering methodology), `docs/granular_training_plan.md` (granular-label experiments).
+See `tools/README.md` for the full script → paper section map.
 
 ## Paper figures
 
@@ -64,8 +61,6 @@ uv run python "tools/paper_figures/Figure N/plot.py"
 ```
 
 regenerates Figure N. Every matplotlib figure (2, 3, 4, 5, 6, 7) is self-contained — no `results/`, encoder weights, or EEG data needed. Figure 1 is an interactive React figure; see [its README](tools/paper_figures/Figure%201/CLAUDE.md).
-
-See [`tools/paper_figures/README.md`](tools/paper_figures/README.md) for the figure → data-bundling status table.
 
 ## Installation
 
@@ -78,20 +73,8 @@ Most scripts accept a `--help` flag describing their inputs and outputs.
 
 ## Citation
 
-```bibtex
-@misc{lehnschioler2026sae4eeg,
-  title  = {Mechanistic Interpretability of {EEG} Foundation Models via Sparse Autoencoders},
-  author = {Lehn-Schi{\o}ler, William and Kj{\ae}r, Magnus Ruud and Thapa, Rahul and
-            Pedersen, Magnus Guldberg and Mosquera, Anton Storgaard and Williams, Nick and
-            Brink-Kj{\ae}r, Andreas and Lehn-Schi{\o}ler, Tue and Beniczky, S{\'a}ndor and
-            Gatej, Radu and Hansen, Lars Kai and Puthusserypady, Sadasivan},
-  year   = {2026},
-  note   = {Preprint},
-}
-```
-
-See `CITATION.cff` for machine-readable metadata.
+Citation metadata is withheld during anonymous review. After de-anonymization, see `CITATION.cff`.
 
 ## License
 
-This code is released under the **PolyForm Noncommercial License 1.0.0** — see [`LICENSE`](LICENSE). Use for academic research, evaluation, and personal study is permitted; commercial use is not. Copyright (c) 2026 BrainCapture.
+This code is released under the **PolyForm Noncommercial License 1.0.0** — see [`LICENSE`](LICENSE). Use for academic research, evaluation, and personal study is permitted; commercial use is not.

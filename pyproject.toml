@@ -5,18 +5,7 @@ description = "Mechanistic Interpretability of EEG Foundation Models via Sparse 
 readme = "README.md"
 requires-python = ">=3.12, <3.13"
 authors = [
-  { name = "William Lehn-Schiøler", email = "wls@braincapture.dk" },
-  { name = "Magnus Ruud Kjær" },
-  { name = "Rahul Thapa" },
-  { name = "Magnus Guldberg Pedersen" },
-  { name = "Anton Storgaard Mosquera" },
-  { name = "Nick Williams" },
-  { name = "Andreas Brink-Kjær" },
-  { name = "Tue Lehn-Schiøler" },
-  { name = "Sándor Beniczky" },
-  { name = "Radu Gatej" },
-  { name = "Lars Kai Hansen" },
-  { name = "Sadasivan Puthusserypady" },
+  { name = "Anonymous (withheld during review)" },
 ]
 license = { text = "PolyForm-Noncommercial-1.0.0" }
 
