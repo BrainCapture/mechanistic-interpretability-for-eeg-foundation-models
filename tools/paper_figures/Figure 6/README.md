@@ -23,4 +23,4 @@ Self-contained: reads `data.npz` (7 KB) next to the script. Produces `figure.png
 - Two steered spectra (n=104 and n=164 top TCAV-ranked features clamped to the target centroid)
 - Metric values M1 (spectral-distance reduction) and M2 (probe-recovery score)
 
-Extraction was done from the development repo using `tools/_archive` data: `results/experiments/sleepfm_finetuned_exp8_k64_layer2/{metadata.json, app_cache.pt}`, the SAE checkpoint, the XAE checkpoint (66 MB in `gs://sae4eeg-app-assets/results/xae/sleepfm_finetuned/xae_checkpoint.pt`), and `results/steering_cache/sleepfm_finetuned_exp8_k64_layer2/steering_cache.pt`. The result is a 7 KB npz that fully specifies the figure.
+Extraction was done from the development repo using the per-experiment app cache (`metadata.json` + `app_cache.pt`), the trained SAE checkpoint, the trained XAE checkpoint (~66 MB; stored in cloud bucket — not shipped), and the steering cache. The result is a 7 KB npz that fully specifies the figure.
