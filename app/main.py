@@ -122,16 +122,17 @@ _EEG_BANDS = {
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Map folder name -> base encoder. Only finetuned variants are listed.
-# `sleepfm_finetuned_local/` is the local re-training that holds the E=1 SAEs
-# referenced by the paper's primary `sleepfm_finetuned_layer*` experiments
-# (whose canonical `sleepfm_finetuned/` folder only ships the E>1 sweep).
-# Pretrained-dashboard folders (`sleepfm/`, `reve/`), `*_granular`, and
-# `sleepfm_v2.*` variants are intentionally absent.
+# `*_local/` folders are local re-trainings that ship the E=1 SAEs missing
+# from their canonical siblings (`sleepfm_finetuned/` carries only the E>1
+# sweep, `reve_qjbe08/` carries E>=2 only). Pretrained-dashboard folders
+# (`sleepfm/`, `reve/`), `*_granular`, and `sleepfm_v2.*` variants are
+# intentionally absent.
 _ALLOWED_FOLDERS: Dict[str, str] = {
     "sleepfm_finetuned":       "sleepfm",
     "sleepfm_finetuned_local": "sleepfm",
     "labram":                  "labram",
     "reve_qjbe08":             "reve",
+    "reve_local":              "reve",
 }
 
 
