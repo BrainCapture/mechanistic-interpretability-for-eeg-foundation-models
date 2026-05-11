@@ -411,6 +411,24 @@ def sidebar():
     )
     encoder = enc_keys[enc_display.index(enc_choice)]
 
+    # ── Helpers ───────────────────────────────────────────────────────
+    # Tick row: render the option labels in a flex row directly under a
+    # select_slider so the user can see all snap positions at a glance.
+    def _tick_row(labels: list[str], current_idx: int) -> None:
+        spans = [
+            (f'<span style="font-weight:700;color:#f7c948;">{lbl}</span>'
+             if i == current_idx
+             else f'<span style="color:#888;">{lbl}</span>')
+            for i, lbl in enumerate(labels)
+        ]
+        html = (
+            '<div style="display:flex;justify-content:space-between;'
+            'font-size:0.72rem;padding:0 6px;margin:-10px 0 6px;">'
+            + "".join(spans)
+            + "</div>"
+        )
+        st.sidebar.markdown(html, unsafe_allow_html=True)
+
     # ── Expansion ─────────────────────────────────────────────────────
     expansions = sorted(runs[encoder].keys())
     def _fmt_E(E: float) -> str:
@@ -426,6 +444,7 @@ def sidebar():
             label_visibility="collapsed",
             key="E_slider",
         )
+        _tick_row([_fmt_E(E) for E in expansions], expansions.index(expansion))
     else:
         expansion = expansions[0]
         st.sidebar.caption(f"Only {_fmt_E(expansion)} available for {enc_choice}")
@@ -444,12 +463,31 @@ def sidebar():
     )
 
     # ── k (sparsity) ──────────────────────────────────────────────────
-    # Always pick the smallest k available (the paper's primary regime is
-    # k=8 — a fixed low number of active features regardless of dictionary
-    # size). Higher-k "k-scaled" variants are intentionally not exposed in
-    # the sidebar.
+    # k is exposed as a sparsity percentage (k / n_features) so the user
+    # picks the desired sparsity rather than a raw integer. Most encoders
+    # ship one k for every E (a fixed low k=8); SleepFM at layer 2 also
+    # has higher-k "k-scaled" variants.
+    _EMBED_DIM: Dict[str, int] = {"sleepfm": 128, "labram": 200, "reve": 512}
+    embed_dim = _EMBED_DIM.get(encoder, 128)
+    n_features = int(embed_dim * float(expansion))
+
     k_options = sorted(runs[encoder][expansion][layer].keys())
-    k_sel = k_options[0]
+    def _fmt_k_pct(k: int) -> str:
+        return f"{100.0 * k / n_features:.2f}%"
+
+    st.sidebar.markdown("**Sparsity**")
+    if len(k_options) >= 2:
+        k_sel = st.sidebar.select_slider(
+            "Sparsity", k_options,
+            value=k_options[0],
+            format_func=_fmt_k_pct,
+            label_visibility="collapsed",
+            key="k_slider",
+        )
+        _tick_row([_fmt_k_pct(k) for k in k_options], k_options.index(k_sel))
+    else:
+        k_sel = k_options[0]
+        st.sidebar.caption(f"{_fmt_k_pct(k_sel)} (k = {k_sel})")
 
     selection_key = (encoder, expansion, layer, k_sel)
     sae_path    = str(runs[encoder][expansion][layer][k_sel])
@@ -555,28 +593,28 @@ def sidebar():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def page_home() -> None:
-    st.title("Large EEG Model Explorer")
-    st.caption("Anonymous Authors")
-    st.caption("Affiliations withheld for anonymous review")
+    st.title("Mechanistic Interpretability for EEG Foundation Models")
+    st.caption("Anonymous Authors · Affiliations withheld for anonymous review")
     st.markdown(
-        "A mechanistic interpretability framework for EEG foundation models, combining "
-        "Sparse Autoencoders (SAEs), spectral decoding, and concept-based attribution to make "
-        "learned representations legible at the clinical level. "
-        "Applied to SleepFM finetuned on 434 K tokens from 1,714 subjects, layer-wise TopK SAEs "
-        "decompose encoder activations into features with interpretable spectral signatures — "
-        "predominantly δ/θ slow waves in the pathology-selective layer."
+        "An interactive companion to the paper. We apply layer-wise TopK Sparse "
+        "Autoencoders (SAEs) to three architecturally distinct EEG foundation models — "
+        "**SleepFM** (multi-modal contrastive), **REVE** (masked-token reconstruction), "
+        "and **LaBraM** (masked spectrum prediction) — each fine-tuned end-to-end on the "
+        "same binary normal/abnormal target. A small spectral decoder maps token "
+        "embeddings back to amplitude per EEG frequency band, so every SAE feature can "
+        "be inspected as an interpretable spectral signature."
     )
     st.markdown(
-        "We introduce **concept steering**: substituting concept-enriched SAE feature activations "
-        "with a target-group centroid and decoding through the spectral decoder, providing "
-        "mechanistic, visualisable evidence of what each feature encodes. "
-        "A key finding is that the standard monosemanticity criterion is *systematically violated* "
-        "in clinical EEG — not as a model failure, but because age and pathology share a "
-        "biological substrate (δ/θ slow waves). "
-        "We redefine monosemanticity with a three-way taxonomy — **separable**, **entangled**, "
-        "and **spurious** — and show via an SAE expansion sweep that the age × pathology "
-        "entanglement is biologically irreducible: it persists at all expansion ratios while "
-        "spurious polysemanticity resolves with capacity."
+        "We introduce **concept steering**: substituting concept-enriched SAE feature "
+        "activations with a target-group centroid and decoding through the spectral "
+        "decoder, providing mechanistic, visualisable evidence of what each feature "
+        "encodes. A key finding is that the standard monosemanticity criterion is "
+        "*systematically violated* in clinical EEG — not as a model failure, but "
+        "because age and pathology share a biological substrate (δ/θ slow waves). "
+        "We redefine monosemanticity with a three-way taxonomy — **separable**, "
+        "**entangled**, and **dead** — and show via an SAE expansion sweep that the "
+        "age × pathology entanglement is biologically irreducible: it persists at all "
+        "expansion ratios while spurious polysemanticity resolves with capacity."
     )
 
     st.divider()
@@ -614,9 +652,10 @@ def page_home() -> None:
         """
 | Control | What it does |
 |---------|-------------|
-| **Model pills** | Switch between encoder families (SleepFM variants, REVE, …) |
-| **Variant pills** | Toggle *Pretrained* vs *Finetuned on D4-v3 (Binary)* vs *Finetuned on D4-v4 (Granular)* checkpoints (when they exist) |
-| **Layer** | Which transformer layer's representations the SAE was trained on |
+| **Model pills** | Switch between encoder families: SleepFM, REVE, LaBraM |
+| **Expansion slider** | SAE dictionary size as a multiple of encoder embedding dim (1× to 128×, log-spaced). Drag along the line; only available `(model, E)` combinations are exposed |
+| **Layer dropdown** | Which transformer layer's representations the SAE was trained on. Available layers vary per model (SleepFM = 3 layers, LaBraM = 12, REVE = 22) |
+| **Sparsity slider** | Top-k sparsity as a percentage of total features. Higher % = more features active per token |
 | **Status dots** | Green = artifact exists on disk; orange = missing (build buttons appear in the relevant tab) |
 """
     )
@@ -644,10 +683,9 @@ def page_home() -> None:
 | **Δ fire rate** | Difference in firing rate between concept tokens and the baseline. Positive = feature fires more on concept EEG. |
 | **BH-adjusted p** | Benjamini–Hochberg FDR-corrected p-value. |
 | **Label correlation** | Pearson *r* between a feature's per-token activation and the binary normal/abnormal label. |
-| **Token** | One patch of EEG processed by the encoder. SleepFM: 5 s per channel-averaged patch. REVE: 1 s per single-channel patch (19 channels × S time steps per sample). |
+| **Token** | One patch of EEG processed by the encoder. SleepFM: 5 s per channel-averaged patch. REVE: 1 s per single-channel patch (19 channels). LaBraM: 1 s patches across 19 channels. |
 | **UMAP** | Uniform Manifold Approximation and Projection — non-linear dimensionality reduction used to visualise high-dimensional token embeddings in 2D. |
-| **Codebook** | Set of prototype tokens obtained by clustering all validation-set tokens in encoder activation space. Each cluster represents a recurring signal pattern. |
-| **Attention** | Transformer self-attention weight from layer 0. High *attention received* (column sum) indicates tokens the model treats as contextually important. |
+| **Attention** | Transformer self-attention weights, inspected per layer. High *attention received* (column sum) indicates tokens the model treats as contextually important. |
 | **Concept steering** | Intervention that zeros out SAE features aligned with a concept to test whether the concept is causally encoded by those features. |
 | **Feature taxonomy** | Three-way classification of SAE features: *separable* (one clear spectral pattern), *entangled* (multiple mixed patterns), or *spurious* (noise / dead). |
 """
