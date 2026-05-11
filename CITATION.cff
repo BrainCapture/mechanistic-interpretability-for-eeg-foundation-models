@@ -1,0 +1,90 @@
+cff-version: 1.2.0
+message: "If you use this code or methodology, please cite the preprint below."
+title: "Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders"
+abstract: >-
+  EEG foundation models achieve state-of-the-art clinical performance, yet
+  the internal computations driving their predictions remain opaque. We apply
+  TopK Sparse Autoencoders across three architecturally distinct EEG
+  transformers (SleepFM, REVE, LaBraM) to extract sparse feature dictionaries
+  from their embeddings, ground these features in a clinical taxonomy
+  (abnormality, age, sex, medication), and benchmark monosemanticity and
+  entanglement across architectures. Via concept steering with a
+  target-vs-off-target selectivity metric, we reveal three operational
+  regimes (selectively steerable, encoded-but-entangled, non-encoded) and
+  surface "wrecking-ball" interventions and clinical entanglements such as
+  age-pathology confounding. A spectral decoder translates latent
+  interventions back to amplitude spectra, providing physiologically
+  interpretable mechanistic explanations.
+authors:
+  - family-names: "Lehn-Schiøler"
+    given-names: "William"
+    email: "wls@braincapture.dk"
+    affiliation: "BrainCapture A/S"
+  - family-names: "Kjær"
+    given-names: "Magnus Ruud"
+    affiliation: "DTU Health Tech, Technical University of Denmark"
+  - family-names: "Thapa"
+    given-names: "Rahul"
+    affiliation: "Stanford University"
+  - family-names: "Pedersen"
+    given-names: "Magnus Guldberg"
+    affiliation: "BrainCapture A/S; DTU Compute, Technical University of Denmark"
+  - family-names: "Mosquera"
+    given-names: "Anton Storgaard"
+    affiliation: "BrainCapture A/S; DTU Compute, Technical University of Denmark"
+  - family-names: "Williams"
+    given-names: "Nick"
+    affiliation: "Seer Medical"
+  - family-names: "Brink-Kjær"
+    given-names: "Andreas"
+    affiliation: "DTU Health Tech, Technical University of Denmark"
+  - family-names: "Lehn-Schiøler"
+    given-names: "Tue"
+    affiliation: "BrainCapture A/S"
+  - family-names: "Beniczky"
+    given-names: "Sándor"
+    affiliation: "Filadelfia Epilepsy Hospital; University Hospital of Copenhagen"
+  - family-names: "Gatej"
+    given-names: "Radu"
+    affiliation: "BrainCapture A/S"
+  - family-names: "Hansen"
+    given-names: "Lars Kai"
+    affiliation: "DTU Compute, Technical University of Denmark"
+  - family-names: "Puthusserypady"
+    given-names: "Sadasivan"
+    affiliation: "DTU Health Tech, Technical University of Denmark"
+type: software
+license: "LicenseRef-PolyForm-Noncommercial-1.0.0"
+repository-code: "https://github.com/BrainCapture/mechanistic-interpretability-for-eeg-foundation-models"
+url: "https://sae4eeg-app-506594542723.europe-west6.run.app/neurips-2026/"
+preferred-citation:
+  type: generic
+  title: "Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders"
+  authors:
+    - family-names: "Lehn-Schiøler"
+      given-names: "William"
+      affiliation: "BrainCapture A/S"
+    - family-names: "Kjær"
+      given-names: "Magnus Ruud"
+    - family-names: "Thapa"
+      given-names: "Rahul"
+    - family-names: "Pedersen"
+      given-names: "Magnus Guldberg"
+    - family-names: "Mosquera"
+      given-names: "Anton Storgaard"
+    - family-names: "Williams"
+      given-names: "Nick"
+    - family-names: "Brink-Kjær"
+      given-names: "Andreas"
+    - family-names: "Lehn-Schiøler"
+      given-names: "Tue"
+    - family-names: "Beniczky"
+      given-names: "Sándor"
+    - family-names: "Gatej"
+      given-names: "Radu"
+    - family-names: "Hansen"
+      given-names: "Lars Kai"
+    - family-names: "Puthusserypady"
+      given-names: "Sadasivan"
+  year: 2026
+  notes: "Preprint"

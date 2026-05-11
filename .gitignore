@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Build artifacts
+build/
+dist/
+*.log
+
+# Data / weights / caches — never check in, see README "What this repo does not contain"
+data/
+checkpoints/
+results/
+*.pt
+*.npz
+*.h5
+*.hdf5
+*.ckpt
+
+# Per-figure bundled data lives next to each plot.py — ship it
+!tools/paper_figures/**/data.*
+
+# Local figure outputs (paper figures under paper/ are tracked)
+results/**/*.png
+!paper/**/*.png
+!paper/**/*.pdf

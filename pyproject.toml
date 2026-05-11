@@ -1,0 +1,62 @@
+[project]
+name = "sae4eeg"
+version = "1.0.0"
+description = "Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders (NeurIPS 2026)"
+readme = "README.md"
+requires-python = ">=3.12, <3.13"
+authors = [
+  { name = "William Lehn-Schiøler", email = "wls@braincapture.dk" },
+  { name = "Magnus Ruud Kjær" },
+  { name = "Rahul Thapa" },
+  { name = "Magnus Guldberg Pedersen" },
+  { name = "Anton Storgaard Mosquera" },
+  { name = "Nick Williams" },
+  { name = "Andreas Brink-Kjær" },
+  { name = "Tue Lehn-Schiøler" },
+  { name = "Sándor Beniczky" },
+  { name = "Radu Gatej" },
+  { name = "Lars Kai Hansen" },
+  { name = "Sadasivan Puthusserypady" },
+]
+license = { text = "PolyForm-Noncommercial-1.0.0" }
+
+dependencies = [
+  "torch==2.5.0+cu118",
+  "numpy>=1.26",
+  "scipy>=1.13",
+  "matplotlib>=3.9",
+  "scikit-learn>=1.8.0",
+  "h5py>=3.15.1",
+  "umap-learn>=0.5.11",
+  "einops>=0.8.1",
+  "tqdm>=4.60.0",
+  # Encoder backends (REVE uses transformers)
+  "transformers>=4.40.0",
+]
+
+[dependency-groups]
+dev = [
+  "ruff",
+  "isort",
+  "mypy",
+  "pytest",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
+type = "index"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu118" }
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[build-system]
+requires    = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
