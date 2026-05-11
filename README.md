@@ -10,7 +10,6 @@ Companion code repository for the preprint **"Mechanistic Interpretability of EE
 src/sae4eeg/          Core library: SAE, XAE, TCAV, encoder wrappers, dataset
 tools/                Analysis pipeline scripts (SAE/XAE/TCAV training, steering, probes)
 tools/paper_figures/  Per-figure self-contained directories (plot.py + data + rendered figure)
-docs/                 Methodology notes (figure registry, cross-model plan)
 ```
 
 ## What this repo does *not* contain (and why)
@@ -29,7 +28,7 @@ This repo is **not end-to-end reproducible**, by design. The components that wou
 | REVE | <https://huggingface.co/brain-bzh/reve-base> (gated; requires EDPB agreement) |
 | LaBraM | Jiang et al., 2024 — see paper §3 for the repository link |
 
-What is included is sufficient to (a) inspect the methodology, (b) audit the analysis code, and (c) port the pipeline to your own EEG corpus and encoder. See `docs/new_model_guide.md` for per-encoder integration notes.
+What is included is sufficient to (a) inspect the methodology and (b) audit the analysis code. Researchers porting the pipeline to their own EEG corpus and encoder can follow the existing encoder wrappers in `src/sae4eeg/encoders.py` (`SleepFMBackend`, `REVEBackend`, `LaBraMBackend`) as templates.
 
 ## Pipeline overview
 
