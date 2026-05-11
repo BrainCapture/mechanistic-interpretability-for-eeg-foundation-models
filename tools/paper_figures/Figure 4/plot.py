@@ -38,7 +38,7 @@ from sklearn.model_selection import train_test_split
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent.parent  # repo root: Figure 4/ -> paper_figures/ -> tools/ -> repo
 sys.path.insert(0, str(ROOT / "src"))
-from sae4eeg.sae import SparseAutoencoder
+from mecheeg.sae import SparseAutoencoder
 
 # ── Models ────────────────────────────────────────────────────────────────────
 def _rgb(arr):

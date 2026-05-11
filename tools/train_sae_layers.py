@@ -32,9 +32,9 @@ from pathlib import Path
 
 import torch
 
-from sae4eeg.sae import SAETrainer, SparseAutoencoder, sae_diagnostics
-from sae4eeg.dataset import get_dataloaders, StandardizeLabel, V4ResampleTransform
-from sae4eeg.encoders import load_encoder
+from mecheeg.sae import SAETrainer, SparseAutoencoder, sae_diagnostics
+from mecheeg.dataset import get_dataloaders, StandardizeLabel, V4ResampleTransform
+from mecheeg.encoders import load_encoder
 
 # ── paths & constants ────────────────────────────────────────────────────────
 ROOT       = Path(__file__).resolve().parent.parent

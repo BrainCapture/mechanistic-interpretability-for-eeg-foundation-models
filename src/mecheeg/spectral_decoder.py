@@ -1,16 +1,16 @@
 """
-Explain AE  (XAE) — Spectral decoder for EEG token interpretability
+Explain AE  (SpectralDecoder) — Spectral decoder for EEG token interpretability
 =====================================================================
 
 The SetTransformer tokeniser compresses 1-second EEG patches into 128-dim
 embedding vectors.  These tokens are opaque — unlike text, we cannot simply
-"read" them.  The XAE learns to reconstruct interpretable Fourier components
+"read" them.  The SpectralDecoder learns to reconstruct interpretable Fourier components
 (amplitude + phase of narrow frequency bands) from those token embeddings,
 giving us a generative spectral decoder we can point at any direction in
 embedding space (e.g. SAE feature directions) and ask: "what does this
 sound like in frequency-domain?"
 
-For time-domain visualisation, the XAE uses **phase-agnostic waveform
+For time-domain visualisation, the SpectralDecoder uses **phase-agnostic waveform
 reconstruction**: per-band waveforms are synthesised from the predicted
 spectral amplitudes via zero-phase iFFT.  This produces symmetric
 "characteristic waveforms" that correctly show frequency content and
@@ -42,7 +42,7 @@ Key design choices
 
 * **Channel-averaged**: because the SetTransformer spatially pools across
   channels before the temporal transformer, each token already represents a
-  channel-averaged view.  The XAE reconstructs the *spatially-pooled*
+  channel-averaged view.  The SpectralDecoder reconstructs the *spatially-pooled*
   spectral signature and waveforms.
 
 Pipeline
@@ -51,25 +51,25 @@ Pipeline
        ↓  FFT (per channel, then average across channels)
   spectral target  (n_bins amplitudes + n_bins×2 phase components)
        ↑
-  XAE decoder  ←  128-dim token embedding  (from SetTransformer)
+  SpectralDecoder decoder  ←  128-dim token embedding  (from SetTransformer)
        ↓  zero-phase iFFT (at display-time, not trained)
   band waveforms  (6 bands × 128 samples, phase-agnostic)
 
 Usage
 -----
-  from xae import SpectralTargetExtractor, ExplainAE, XAETrainer
+  from spectral_decoder import SpectralTargetExtractor, SpectralDecoder, SpectralDecoderTrainer
   
   # 1. Build spectral targets from raw EEG
   extractor = SpectralTargetExtractor(fs=128, n_fft=128)
   targets = extractor(raw_eeg_patches)   # (N, n_bins * 3)
   
-  # 2. Train XAE on (token_embedding, spectral_target) pairs
-  trainer = XAETrainer(embed_dim=128, n_bins=extractor.n_bins)
+  # 2. Train SpectralDecoder on (token_embedding, spectral_target) pairs
+  trainer = SpectralDecoderTrainer(embed_dim=128, n_bins=extractor.n_bins)
   trainer.train(model, dataloader)
   
   # 3. Decode any direction in embedding space
-  xae = trainer.xae
-  spectrum = xae.decode(sae_feature_direction)    # interpretable!
+  spectral_decoder = trainer.spectral_decoder
+  spectrum = spectral_decoder.decode(sae_feature_direction)    # interpretable!
   waveforms = trainer.spectral_to_waveforms(amp)  # zero-phase per-band waveforms
 """
 
@@ -82,7 +82,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
-from sae4eeg.sae import ActivationExtractor
+from mecheeg.sae import ActivationExtractor
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ CLINICAL_BANDS = {
 
 class SpectralTargetExtractor:
     """
-    Convert raw EEG patches into spectral targets for XAE training.
+    Convert raw EEG patches into spectral targets for SpectralDecoder training.
 
     For each 1-second EEG patch (C channels × T samples):
       1. Compute FFT per channel
@@ -410,7 +410,7 @@ class BroadbandTemporalTargetExtractor:
         self.fs = fs
         self.patch_size = patch_size
         self.n_channels = n_channels
-        self.n_bands = n_channels  # alias used by ExplainAE config
+        self.n_bands = n_channels  # alias used by SpectralDecoder config
         self.target_dim = n_channels * patch_size
         self.BAND_NAMES: List[str] = [f"ch{i:02d}" for i in range(n_channels)]
 
@@ -473,7 +473,7 @@ class MorphologyTargetExtractor:
     Inputs and outputs use the same standardisation as the spectral
     extractor — i.e. the patches are whatever the encoder sees (already
     z-scored for SleepFM).  Targets are downstream-normalised by the
-    XAETrainer (mean/std per-feature), so absolute units don't matter.
+    SpectralDecoderTrainer (mean/std per-feature), so absolute units don't matter.
 
     Parameters
     ----------
@@ -619,7 +619,7 @@ class MorphologyTargetExtractor:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2.  ExplainAE Model
+# 2.  SpectralDecoder Model
 # ─────────────────────────────────────────────────────────────────────────────
 
 class _ResidualBlock(nn.Module):
@@ -640,7 +640,7 @@ class _ResidualBlock(nn.Module):
         return x + self.net(self.norm(x))
 
 
-class ExplainAE(nn.Module):
+class SpectralDecoder(nn.Module):
     """
     Autoencoder that maps token embeddings ↔ spectral representations,
     with an optional temporal decoder head for band-pass filtered waveforms.
@@ -1067,17 +1067,17 @@ class ExplainAE(nn.Module):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 3.  XAE Trainer
+# 3.  SpectralDecoder Trainer
 # ─────────────────────────────────────────────────────────────────────────────
 
-class XAETrainer:
+class SpectralDecoderTrainer:
     """
-    Trains the ExplainAE by:
+    Trains the SpectralDecoder by:
       1. Freezing the SetTransformer
       2. Running EEG data through it to extract (token_embedding, raw_patch) pairs
       3. Computing FFT spectral targets from the raw patches
       4. Optionally computing band-pass filtered temporal targets
-      5. Training the XAE on (embedding, spectral_target [, temporal_target]) pairs
+      5. Training the SpectralDecoder on (embedding, spectral_target [, temporal_target]) pairs
 
     Parameters
     ----------
@@ -1085,7 +1085,7 @@ class XAETrainer:
     fs               : EEG sampling rate
     n_fft            : FFT length
     f_min, f_max     : frequency range to keep
-    hidden_dim       : XAE hidden layer width
+    hidden_dim       : SpectralDecoder hidden layer width
     lr               : learning rate
     batch_size       : training batch size
     epochs           : number of training epochs
@@ -1169,8 +1169,8 @@ class XAETrainer:
             )
             morphology_dim = self.morphology_extractor.target_dim
 
-        # Build XAE model
-        self.xae = ExplainAE(
+        # Build SpectralDecoder model
+        self.spectral_decoder = SpectralDecoder(
             embed_dim=embed_dim,
             target_dim=self.spectral.target_dim,
             temporal_dim=temporal_dim,
@@ -1225,7 +1225,7 @@ class XAETrainer:
         n_enc_channels: Optional[int] = None  # set for per-channel backends (REVE, LaBraM)
         n_prefix_tokens: int = getattr(set_transformer, "n_prefix_tokens", 0)
         try:
-            from sae4eeg.encoders import EncoderBackend
+            from mecheeg.encoders import EncoderBackend
             if isinstance(set_transformer, EncoderBackend):
                 inner_model = set_transformer.model
                 hook_layers = set_transformer.get_hookable_layers()
@@ -1356,7 +1356,7 @@ class XAETrainer:
             extras += f"  temporal: {temporal_targets.shape}"
         if morphology_targets is not None:
             extras += f"  morphology: {morphology_targets.shape}"
-        print(f"[XAE] Collected {len(embeddings)} (token, spectrum) pairs  "
+        print(f"[SpectralDecoder] Collected {len(embeddings)} (token, spectrum) pairs  "
               f"| embed: {embeddings.shape}  target: {targets.shape}{extras}")
         return embeddings, targets, temporal_targets, morphology_targets
 
@@ -1370,11 +1370,11 @@ class XAETrainer:
         max_tokens: Optional[int] = None,
         patience: int = 15,
         pool_channels: bool = False,
-    ) -> "ExplainAE":
+    ) -> "SpectralDecoder":
         """
-        Full pipeline: collect pairs → normalise → train XAE.
+        Full pipeline: collect pairs → normalise → train SpectralDecoder.
 
-        Returns the trained ExplainAE (also stored as self.xae).
+        Returns the trained SpectralDecoder (also stored as self.spectral_decoder).
         """
         # 1. Collect (embedding, spectral_target [, temporal_target, morphology_target]) pairs
         embeddings, targets, temporal_targets, morphology_targets = self.collect_pairs(
@@ -1388,7 +1388,7 @@ class XAETrainer:
         alive_mask = amp_std > 0.01
         n_dead = (~alive_mask).sum().item()
         if n_dead > 0:
-            print(f"[XAE] Filtered {n_dead} dead patches "
+            print(f"[SpectralDecoder] Filtered {n_dead} dead patches "
                   f"(near-zero amplitude variance)")
             embeddings = embeddings[alive_mask]
             targets = targets[alive_mask]
@@ -1420,7 +1420,7 @@ class XAETrainer:
             self.morphology_std = morphology_targets.std(dim=0).clamp(min=1e-8)
             morphology_norm = (morphology_targets - self.morphology_mean) / self.morphology_std
 
-        msg = (f"[XAE] Normalised — embed μ-norm={self.embed_mean.norm():.3f}, "
+        msg = (f"[SpectralDecoder] Normalised — embed μ-norm={self.embed_mean.norm():.3f}, "
                f"target μ-norm={self.target_mean.norm():.3f}")
         if self.temporal_mean is not None:
             msg += f", temporal μ-norm={self.temporal_mean.norm():.3f}"
@@ -1444,7 +1444,7 @@ class XAETrainer:
                 val_morphology_norm = (val_morphology - self.morphology_mean) / self.morphology_std
 
         # 4. Train
-        self._train_xae(
+        self._train_spectral_decoder(
             embeddings_norm, targets_norm,
             val_embed_norm, val_target_norm,
             temporal_norm, val_temporal_norm,
@@ -1452,10 +1452,10 @@ class XAETrainer:
             patience=patience,
         )
 
-        return self.xae
+        return self.spectral_decoder
 
     # ------------------------------------------------------------------
-    def _train_xae(
+    def _train_spectral_decoder(
         self,
         embeddings: torch.Tensor,
         targets: torch.Tensor,
@@ -1468,8 +1468,8 @@ class XAETrainer:
         patience: int = 15,
     ):
         """Core training loop with early stopping."""
-        xae = self.xae.to(self.device)
-        opt = torch.optim.AdamW(xae.parameters(), lr=self.lr, weight_decay=1e-4)
+        spectral_decoder = self.spectral_decoder.to(self.device)
+        opt = torch.optim.AdamW(spectral_decoder.parameters(), lr=self.lr, weight_decay=1e-4)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             opt, T_max=self.epochs, eta_min=self.lr * 0.01
         )
@@ -1504,7 +1504,7 @@ class XAETrainer:
             self.history["val_morph_mse"] = []
 
         for epoch in range(self.epochs):
-            xae.train()
+            spectral_decoder.train()
             epoch_loss = 0.0
             epoch_amp = 0.0
             epoch_phase = 0.0
@@ -1528,7 +1528,7 @@ class XAETrainer:
                 if has_morph:
                     morph_batch = batch_data[idx].to(self.device); idx += 1
 
-                loss, details = xae.full_loss(
+                loss, details = spectral_decoder.full_loss(
                     emb_batch, tgt_batch,
                     phase_weight=self.phase_weight,
                     recon_weight=self.recon_weight,
@@ -1541,7 +1541,7 @@ class XAETrainer:
 
                 opt.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(xae.parameters(), 1.0)
+                torch.nn.utils.clip_grad_norm_(spectral_decoder.parameters(), 1.0)
                 opt.step()
 
                 epoch_loss += loss.item()
@@ -1584,7 +1584,7 @@ class XAETrainer:
             # Validation + early stopping
             if val_embeddings is not None:
                 val_loss, val_details = self._eval(
-                    xae, val_embeddings, val_targets, val_temporal, val_morphology,
+                    spectral_decoder, val_embeddings, val_targets, val_temporal, val_morphology,
                 )
                 self.history["val_total"].append(val_loss)
                 self.history["val_amp"].append(val_details["amp_loss"])
@@ -1601,7 +1601,7 @@ class XAETrainer:
                     log += f"  val_morph_mse={val_details['morph_mse']:.4f}"
                 if val_loss < best_val_loss - 1e-4:
                     best_val_loss = val_loss
-                    best_state = {k: v.cpu().clone() for k, v in xae.state_dict().items()}
+                    best_state = {k: v.cpu().clone() for k, v in spectral_decoder.state_dict().items()}
                     best_epoch = epoch + 1
                     wait = 0
                     log += "  ★"
@@ -1619,24 +1619,24 @@ class XAETrainer:
 
         # Restore best model if we did validation
         if best_state is not None:
-            xae.load_state_dict(best_state)
+            spectral_decoder.load_state_dict(best_state)
             print(f"  ✓ Restored best validation model "
                   f"(epoch {best_epoch}, val_loss={best_val_loss:.4f})")
 
-        self.xae = xae.cpu()
+        self.spectral_decoder = spectral_decoder.cpu()
 
     # ------------------------------------------------------------------
     @torch.no_grad()
     def _eval(
         self,
-        xae: ExplainAE,
+        spectral_decoder: SpectralDecoder,
         val_embeddings: torch.Tensor,
         val_targets: torch.Tensor,
         val_temporal: Optional[torch.Tensor] = None,
         val_morphology: Optional[torch.Tensor] = None,
     ) -> Tuple[float, Dict[str, float]]:
         """Evaluate on validation set."""
-        xae.eval()
+        spectral_decoder.eval()
         total_loss = 0.0
         total_amp = 0.0
         total_phase = 0.0
@@ -1654,7 +1654,7 @@ class XAETrainer:
             morph = None
             if val_morphology is not None:
                 morph = val_morphology[i : i + self.batch_size].to(self.device)
-            loss, details = xae.full_loss(
+            loss, details = spectral_decoder.full_loss(
                 emb, tgt, self.phase_weight, self.recon_weight,
                 temporal_targets=temp,
                 temporal_weight=self.temporal_weight,
@@ -1703,7 +1703,7 @@ class XAETrainer:
             cos_phase:  (..., n_bins)
             sin_phase:  (..., n_bins)
         """
-        self.xae.eval()
+        self.spectral_decoder.eval()
         was_1d = direction.dim() == 1
         if was_1d:
             direction = direction.unsqueeze(0)
@@ -1713,7 +1713,7 @@ class XAETrainer:
             direction = (direction - self.embed_mean) / self.embed_std
 
         with torch.no_grad():
-            pred = self.xae.decode(direction)
+            pred = self.spectral_decoder.decode(direction)
 
         # Denormalise output
         if denormalise and self.target_mean is not None:
@@ -1743,10 +1743,10 @@ class XAETrainer:
         Returns:
             dict mapping band_name → (..., patch_size) waveform, or None
         """
-        if self.temporal_extractor is None or self.xae.dec_temporal_head is None:
+        if self.temporal_extractor is None or self.spectral_decoder.dec_temporal_head is None:
             return None
 
-        self.xae.eval()
+        self.spectral_decoder.eval()
         was_1d = direction.dim() == 1
         if was_1d:
             direction = direction.unsqueeze(0)
@@ -1756,7 +1756,7 @@ class XAETrainer:
             direction = (direction - self.embed_mean) / self.embed_std
 
         with torch.no_grad():
-            pred = self.xae.decode_temporal(direction)
+            pred = self.spectral_decoder.decode_temporal(direction)
 
         # Denormalise output
         if denormalise and self.temporal_mean is not None:
@@ -1784,10 +1784,10 @@ class XAETrainer:
         Returns:
             dict mapping feature_name → scalar (or (N,)) tensor, or None
         """
-        if self.morphology_extractor is None or self.xae.dec_morph_head is None:
+        if self.morphology_extractor is None or self.spectral_decoder.dec_morph_head is None:
             return None
 
-        self.xae.eval()
+        self.spectral_decoder.eval()
         was_1d = direction.dim() == 1
         if was_1d:
             direction = direction.unsqueeze(0)
@@ -1796,7 +1796,7 @@ class XAETrainer:
             direction = (direction - self.embed_mean) / self.embed_std
 
         with torch.no_grad():
-            pred = self.xae.decode_morphology(direction)
+            pred = self.spectral_decoder.decode_morphology(direction)
 
         if denormalise and self.morphology_mean is not None:
             pred = pred * self.morphology_std + self.morphology_mean
@@ -1942,9 +1942,9 @@ class XAETrainer:
 
     # ------------------------------------------------------------------
     def save(self, path: str):
-        """Save XAE checkpoint."""
+        """Save SpectralDecoder checkpoint."""
         state = {
-            "xae_state_dict": self.xae.state_dict(),
+            "spectral_decoder_state_dict": self.spectral_decoder.state_dict(),
             "embed_mean": self.embed_mean,
             "embed_std": self.embed_std,
             "target_mean": self.target_mean,
@@ -1959,16 +1959,16 @@ class XAETrainer:
                 "bin_labels": self.spectral.bin_labels,
             },
             "model_config": {
-                "embed_dim": self.xae.embed_dim,
-                "target_dim": self.xae.target_dim,
-                "temporal_dim": self.xae.temporal_dim,
-                "morphology_dim": self.xae.morphology_dim,
-                "hidden_dim": self.xae.hidden_dim,
-                "n_bins": self.xae.n_bins,
-                "n_bands": self.xae.n_bands,
-                "patch_size": self.xae.patch_size,
-                "n_blocks": self.xae.n_blocks,
-                "dropout": self.xae.dropout,
+                "embed_dim": self.spectral_decoder.embed_dim,
+                "target_dim": self.spectral_decoder.target_dim,
+                "temporal_dim": self.spectral_decoder.temporal_dim,
+                "morphology_dim": self.spectral_decoder.morphology_dim,
+                "hidden_dim": self.spectral_decoder.hidden_dim,
+                "n_bins": self.spectral_decoder.n_bins,
+                "n_bands": self.spectral_decoder.n_bands,
+                "patch_size": self.spectral_decoder.patch_size,
+                "n_blocks": self.spectral_decoder.n_blocks,
+                "dropout": self.spectral_decoder.dropout,
             },
             # Temporal normalisation stats
             "temporal_mean": self.temporal_mean,
@@ -1998,15 +1998,15 @@ class XAETrainer:
                 "feature_names": self.morphology_extractor.feature_names,
             }
         torch.save(state, path)
-        print(f"[XAE] Saved checkpoint to {path}")
+        print(f"[SpectralDecoder] Saved checkpoint to {path}")
 
     def load(self, path: str):
-        """Load XAE checkpoint."""
+        """Load SpectralDecoder checkpoint."""
         state = torch.load(path, map_location="cpu", weights_only=False)
 
         # Rebuild model with saved config
         cfg = state["model_config"]
-        self.xae = ExplainAE(
+        self.spectral_decoder = SpectralDecoder(
             embed_dim=cfg["embed_dim"],
             target_dim=cfg["target_dim"],
             temporal_dim=cfg.get("temporal_dim"),
@@ -2018,7 +2018,7 @@ class XAETrainer:
             n_blocks=cfg.get("n_blocks", 3),
             dropout=cfg.get("dropout", 0.1),
         )
-        self.xae.load_state_dict(state["xae_state_dict"])
+        self.spectral_decoder.load_state_dict(state["spectral_decoder_state_dict"])
 
         # Restore normalisation stats
         self.embed_mean = state["embed_mean"]
@@ -2070,6 +2070,6 @@ class XAETrainer:
             extra += f", temporal_dim={cfg['temporal_dim']}"
         if cfg.get("morphology_dim"):
             extra += f", morphology_dim={cfg['morphology_dim']}"
-        print(f"[XAE] Loaded checkpoint from {path}  "
+        print(f"[SpectralDecoder] Loaded checkpoint from {path}  "
               f"(n_bins={self.spectral.n_bins}, "
-              f"target_dim={self.xae.target_dim}{extra})")
+              f"target_dim={self.spectral_decoder.target_dim}{extra})")

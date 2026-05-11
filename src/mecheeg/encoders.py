@@ -17,7 +17,7 @@ Defines the ``EncoderBackend`` protocol and two concrete implementations:
 
 Usage
 -----
-    from sae4eeg.encoders import load_encoder
+    from mecheeg.encoders import load_encoder
 
     # SleepFM (default, weights from sleepfm_weights.pt)
     backend = load_encoder("sleepfm", weights_path="sleepfm_weights.pt")
@@ -224,7 +224,7 @@ class SleepFMBackend(EncoderBackend):
         dropout: float = 0.3,
         target_layer: int = 2,
     ):
-        from sae4eeg.sleepfm import SetTransformer  # local import to avoid cycles
+        from mecheeg.sleepfm import SetTransformer  # local import to avoid cycles
 
         self.embed_dim    = embed_dim
         self.patch_size   = patch_size
@@ -567,13 +567,13 @@ class LaBraMBackend(EncoderBackend):
         n_channels: int = 19,
         init_values: float = 0.1,
     ):
-        from sae4eeg.labram import labram_base_patch200_200, remap_braindecode_state_dict
+        from mecheeg.labram import labram_base_patch200_200, remap_braindecode_state_dict
 
         self.target_layer = target_layer
         self.n_channels = n_channels
         self.max_time_patches = max_time_patches
         # Per-channel-per-second token layout. The 19 channel names mirror REVE's
-        # 10-20 montage so that XAE/SAE token-collection helpers take the same
+        # 10-20 montage so that SpectralDecoder/SAE token-collection helpers take the same
         # per-channel branch (rather than the SleepFM channel-pooled branch).
         self.channel_names = _D4_CHANNEL_NAMES[:n_channels]
         # forward_features(return_all_tokens=True) emits 1 CLS prefix token before
@@ -1001,7 +1001,7 @@ class SleepFMv2Backend(SleepFMBackend):
         target_layer: int = 5,
         max_seq_length: int = 128,
     ):
-        from sae4eeg.sleepfm import SetTransformer, TokenizerV2  # avoid circular
+        from mecheeg.sleepfm import SetTransformer, TokenizerV2  # avoid circular
 
         self.embed_dim    = embed_dim
         self.patch_size   = patch_size

@@ -36,8 +36,8 @@ import torch.nn.functional as F
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from sae4eeg.dataset import StandardizeLabel, get_dataloaders
-from sae4eeg.encoders import load_encoder
+from mecheeg.dataset import StandardizeLabel, get_dataloaders
+from mecheeg.encoders import load_encoder
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 

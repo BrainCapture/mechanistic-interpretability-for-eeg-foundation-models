@@ -47,9 +47,9 @@ from torch.utils.data import DataLoader
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from sae4eeg.dataset import H5PYDatasetLabeled, StandardizeLabel
-from sae4eeg.encoders import load_encoder
-from sae4eeg.sae import SparseAutoencoder
+from mecheeg.dataset import H5PYDatasetLabeled, StandardizeLabel
+from mecheeg.encoders import load_encoder
+from mecheeg.sae import SparseAutoencoder
 
 # Reuse model builders + block accessors from the k-fold orchestrator
 sys.path.insert(0, str(ROOT / "tools"))

@@ -7,8 +7,8 @@ Companion code repository for the preprint **"Mechanistic Interpretability of EE
 ## What this repo contains
 
 ```
-src/sae4eeg/          Core library: SAE, XAE, TCAV, encoder wrappers, dataset
-tools/                Analysis pipeline scripts (SAE/XAE/TCAV training, steering, probes)
+src/mecheeg/          Core library: SAE, spectral decoder, TCAV, encoder wrappers, dataset
+tools/                Analysis pipeline scripts (SAE/spectral decoder/TCAV training, steering, probes)
 tools/paper_figures/  Per-figure self-contained directories (plot.py + data + rendered figure)
 ```
 
@@ -18,7 +18,7 @@ This repo is **not end-to-end reproducible**, by design. The components that wou
 
 - **EEG data** — the clinical EEG dataset (~2,900 subjects) used in the paper is not publicly available
 - **Fine-tuned encoder weights** — the binary-finetuned SleepFM, REVE, and LaBraM checkpoints used in the paper are not released
-- **Pre-built result caches** — SAE/XAE checkpoints, TCAV caches, steering caches
+- **Pre-built result caches** — SAE/spectral decoder checkpoints, TCAV caches, steering caches
 
 **Pre-trained encoder weights** (the starting point for the fine-tuned variants) are publicly available from their original authors:
 
@@ -28,12 +28,12 @@ This repo is **not end-to-end reproducible**, by design. The components that wou
 | REVE | <https://huggingface.co/brain-bzh/reve-base> (gated; requires EDPB agreement) |
 | LaBraM | Jiang et al., 2024 — see paper §3 for the repository link |
 
-What is included is sufficient to (a) inspect the methodology and (b) audit the analysis code. Researchers porting the pipeline to their own EEG corpus and encoder can follow the existing encoder wrappers in `src/sae4eeg/encoders.py` (`SleepFMBackend`, `REVEBackend`, `LaBraMBackend`) as templates.
+What is included is sufficient to (a) inspect the methodology and (b) audit the analysis code. Researchers porting the pipeline to their own EEG corpus and encoder can follow the existing encoder wrappers in `src/mecheeg/encoders.py` (`SleepFMBackend`, `REVEBackend`, `LaBraMBackend`) as templates.
 
 ## Pipeline overview
 
 ```
-frozen encoder  →  SAE  →  XAE (spectral decoder)
+frozen encoder  →  SAE  →  spectral decoder
                     ↓        ↓
                    TCAV   feature explanations
                     ↓
@@ -43,7 +43,7 @@ frozen encoder  →  SAE  →  XAE (spectral decoder)
 | Step | Script | Output |
 |---|---|---|
 | 1. Train SAEs on encoder layers | `tools/train_sae_layers.py` | `results/features/{encoder}/sae_*.pt` |
-| 2. Train XAE (spectral decoder) | `tools/train_xae.py` | `results/xae/{encoder}/` |
+| 2. Train spectral decoder | `tools/train_spectral_decoder.py` | `results/spectral_decoder/{encoder}/` |
 | 3. Compute TCAV (concept attribution) | `tools/run_tcav.py` | `results/tcav/{experiment}/tcav_cache.pt` |
 | 4. Build steering cache | `tools/build_steering_cache.py` | `results/steering_cache/{experiment}/` |
 | 5. Compute monosemanticity taxonomy | `tools/analyze_monosemanticity.py` | per-experiment |

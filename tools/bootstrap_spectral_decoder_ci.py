@@ -1,18 +1,18 @@
-"""Bootstrap CIs for XAE amplitude R² across encoders.
+"""Bootstrap CIs for SpectralDecoder amplitude R² across encoders.
 
-Uses the same eval pipeline as compare_xae.py, but caches per-token
+Uses the same eval pipeline as compare_spectral_decoder.py, but caches per-token
 squared residuals + squared deviations and bootstraps R² over tokens
 (N_BOOT iterations) to give 95% CIs on overall + per-band amplitude R².
 
-The point estimates here should match xae_comparison_metrics.json (modulo
+The point estimates here should match spectral_decoder_comparison_metrics.json (modulo
 sampling noise from collect_pairs's max_tokens cap).
 
 Usage:
-  uv run tools/bootstrap_xae_ci.py            # primary 3 encoders
-  uv run tools/bootstrap_xae_ci.py --include-all  # every entry in MODELS
+  uv run tools/bootstrap_spectral_decoder_ci.py            # primary 3 encoders
+  uv run tools/bootstrap_spectral_decoder_ci.py --include-all  # every entry in MODELS
 
 Outputs:
-  results/xae/xae_bootstrap_ci.json
+  results/spectral_decoder/spectral_decoder_bootstrap_ci.json
 """
 from __future__ import annotations
 
@@ -28,21 +28,21 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "tools"))
 
-from sae4eeg.xae import CLINICAL_BANDS  # noqa: E402
-from sae4eeg.dataset import get_dataloaders, StandardizeLabel, V4ResampleTransform  # noqa: E402
-from sae4eeg.encoders import load_encoder  # noqa: E402
+from mecheeg.spectral_decoder import CLINICAL_BANDS  # noqa: E402
+from mecheeg.dataset import get_dataloaders, StandardizeLabel, V4ResampleTransform  # noqa: E402
+from mecheeg.encoders import load_encoder  # noqa: E402
 
-# Reuse model registry + XAE loader from compare_xae.py.
-from compare_xae import MODELS as _BASE_MODELS, _load_xae  # noqa: E402
+# Reuse model registry + SpectralDecoder loader from compare_spectral_decoder.py.
+from compare_spectral_decoder import MODELS as _BASE_MODELS, _load_spectral_decoder  # noqa: E402
 
 # Add the paper's primary SleepFM checkpoint (binary-finetuned), which isn't
-# in compare_xae's registry. Reuse the "sleepfm" backend factory.
-from sae4eeg.encoders import MODEL_CARDS  # noqa: E402
+# in compare_spectral_decoder's registry. Reuse the "sleepfm" backend factory.
+from mecheeg.encoders import MODEL_CARDS  # noqa: E402
 
 MODELS = dict(_BASE_MODELS)
 MODELS["sleepfm_finetuned"] = dict(
     display_name="SleepFM finetuned (paper primary)",
-    xae_ckpt=ROOT / "results" / "xae" / "sleepfm_finetuned" / "xae_checkpoint.pt",
+    spectral_decoder_ckpt=ROOT / "results" / "spectral_decoder" / "sleepfm_finetuned" / "spectral_decoder_checkpoint.pt",
     data_path=ROOT / "data" / "D4-v3-preprocessed-v2",
     target_layer=2,
     patch_size=128,
@@ -61,7 +61,7 @@ PRIMARY = ("sleepfm_finetuned", "labram", "reve")
 
 def _collect_predictions(trainer, encoder, val_loader, target_layer,
                          pool_channels, max_tokens):
-    """Run the encoder + XAE forward pass; return ground-truth and predicted
+    """Run the encoder + SpectralDecoder forward pass; return ground-truth and predicted
     log-amplitude tensors of shape (N, n_bins) on CPU."""
     embeddings, targets, _, _ = trainer.collect_pairs(
         encoder, val_loader, target_layer,
@@ -71,7 +71,7 @@ def _collect_predictions(trainer, encoder, val_loader, target_layer,
     embeddings = embeddings.to(DEVICE)
     emb_norm = (embeddings - trainer.embed_mean) / trainer.embed_std
     with torch.no_grad():
-        pred_norm = trainer.xae.decode(emb_norm)
+        pred_norm = trainer.spectral_decoder.decode(emb_norm)
     pred = (pred_norm * trainer.target_std + trainer.target_mean).cpu()
     targets = targets.cpu()
     return targets[:, :n_bins].numpy(), pred[:, :n_bins].numpy()
@@ -117,7 +117,7 @@ def main() -> None:
 
     for model_key in keys:
         cfg = MODELS[model_key]
-        if not cfg["xae_ckpt"].exists():
+        if not cfg["spectral_decoder_ckpt"].exists():
             print(f"[skip — no checkpoint] {model_key}")
             continue
 
@@ -127,7 +127,7 @@ def main() -> None:
         backend_key = cfg.get("encoder_key", model_key)
         encoder = load_encoder(backend_key, weights_path=str(wp) if wp is not None else None)
         encoder.to(DEVICE).eval()
-        trainer = _load_xae(cfg)
+        trainer = _load_spectral_decoder(cfg)
 
         transform = V4ResampleTransform() if "D4-v4" in str(cfg["data_path"]) else StandardizeLabel()
         gen = get_dataloaders(
@@ -173,7 +173,7 @@ def main() -> None:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    out_path = ROOT / "results" / "xae" / "xae_bootstrap_ci.json"
+    out_path = ROOT / "results" / "spectral_decoder" / "spectral_decoder_bootstrap_ci.json"
     out_path.write_text(json.dumps(out, indent=2))
     print(f"\nSaved {out_path.relative_to(ROOT)}")
 

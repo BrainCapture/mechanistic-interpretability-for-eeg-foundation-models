@@ -1,6 +1,6 @@
 """Build a lightweight steering cache from the full dataset.
 
-The concept steering scripts (plot_concept_steering_xae_all.py) normally draw
+The concept steering scripts (plot_concept_steering_spectral_decoder_all.py) normally draw
 tokens from the app_cache, which only covers the validation split (~10% of
 subjects).  This tool collects encoder embeddings and metadata from the
 *entire* dataset (train + val + test) and saves a compact cache suitable for
@@ -11,7 +11,7 @@ Only collects what the steering scripts need:
   - per-token metadata      (age_group, gender, classification,
                              medication_group, subject_id)
 
-Does NOT run UMAP, codebook assignment, XAE decoding, or feature stats.
+Does NOT run UMAP, codebook assignment, SpectralDecoder decoding, or feature stats.
 Runtime: ~5–15 min depending on GPU / dataset size.
 
 Output:
@@ -49,7 +49,7 @@ from build_app_cache import (
     _load_model,
 )
 
-from sae4eeg.dataset import H5PYDatasetLabeled, StandardizeLabel
+from mecheeg.dataset import H5PYDatasetLabeled, StandardizeLabel
 
 
 def _collect_embeddings_dual(model, full_loader, primary_layer, max_tokens):
@@ -63,8 +63,8 @@ def _collect_embeddings_dual(model, full_loader, primary_layer, max_tokens):
     Spectral targets, raw patches, and labels are *not* needed by the
     steering cache, so we drop them entirely (further win vs _collect_tokens).
     """
-    from sae4eeg.encoders import EncoderBackend
-    from sae4eeg.sae import ActivationExtractor
+    from mecheeg.encoders import EncoderBackend
+    from mecheeg.sae import ActivationExtractor
     from tqdm import tqdm
 
     assert isinstance(model, EncoderBackend), \
@@ -155,17 +155,17 @@ print(f"Encoder    : {encoder_name}")
 print(f"Data path  : {data_path}")
 print(f"Device     : {DEVICE}")
 
-# ── Load encoder & XAE (XAE needed by _collect_tokens) ───────────────────────
+# ── Load encoder & SpectralDecoder (SpectralDecoder needed by _collect_tokens) ───────────────────────
 print("\n[Loading encoder]")
 weights_path = meta.get("weights_path")
 model = _load_model(encoder_name,
                     weights_path=ROOT / weights_path if weights_path else None)
 
-print("\n[Loading XAE]")
-from sae4eeg.xae import XAETrainer
-xae_trainer = XAETrainer(embed_dim=meta["embed_dim"], device=DEVICE)
-xae_trainer.load(str(ROOT / meta["xae_checkpoint"]))
-xae_trainer.xae.to(DEVICE).eval()
+print("\n[Loading SpectralDecoder]")
+from mecheeg.spectral_decoder import SpectralDecoderTrainer
+spectral_decoder_trainer = SpectralDecoderTrainer(embed_dim=meta["embed_dim"], device=DEVICE)
+spectral_decoder_trainer.load(str(ROOT / meta["spectral_decoder_checkpoint"]))
+spectral_decoder_trainer.spectral_decoder.to(DEVICE).eval()
 
 # ── Full dataset loader ───────────────────────────────────────────────────────
 print("\n[Building full-dataset loader]")
@@ -195,7 +195,7 @@ if final_layer != _bac.TARGET_LAYER:
 else:
     print(f"\n[Single-pass collect — target == final layer, cap={max_tokens}]")
     embeddings, _, _, _, tokens_per_window = _collect_tokens(
-        model, xae_trainer, full_loader, max_tokens)
+        model, spectral_decoder_trainer, full_loader, max_tokens)
     embeddings_final = None  # SleepFM L2 == final, M2 already correct
     print(f"  Collected {len(embeddings)} tokens  ({tokens_per_window} tok/window)")
 

@@ -1,18 +1,18 @@
 """
-compare_xae.py — Cross-model XAE reconstruction quality comparison
+compare_spectral_decoder.py — Cross-model SpectralDecoder reconstruction quality comparison
 ===================================================================
 
-Loads trained XAE checkpoints for all SleepFM variants and computes
+Loads trained SpectralDecoder checkpoints for all SleepFM variants and computes
 amplitude and phase reconstruction metrics on the validation split.
 
-Outputs (in results/xae/):
-  xae_comparison_amplitude.png  — Per-band amplitude R² for every model
-  xae_comparison_phase.png      — Per-band phase cosine similarity for every model
-  xae_comparison_overall.png    — Overall amplitude R² + phase cosim summary
-  xae_comparison_metrics.json  — Machine-readable metrics for the Streamlit comparison page
+Outputs (in results/spectral_decoder/):
+  spectral_decoder_comparison_amplitude.png  — Per-band amplitude R² for every model
+  spectral_decoder_comparison_phase.png      — Per-band phase cosine similarity for every model
+  spectral_decoder_comparison_overall.png    — Overall amplitude R² + phase cosim summary
+  spectral_decoder_comparison_metrics.json  — Machine-readable metrics for the Streamlit comparison page
 
 Usage:
-  uv run tools/compare_xae.py
+  uv run tools/compare_spectral_decoder.py
 """
 
 from __future__ import annotations
@@ -30,9 +30,9 @@ import torch
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from sae4eeg.xae import ExplainAE, SpectralTargetExtractor, XAETrainer, CLINICAL_BANDS
-from sae4eeg.dataset import get_dataloaders, StandardizeLabel, V4ResampleTransform
-from sae4eeg.encoders import load_encoder, MODEL_CARDS
+from mecheeg.spectral_decoder import SpectralDecoder, SpectralTargetExtractor, SpectralDecoderTrainer, CLINICAL_BANDS
+from mecheeg.dataset import get_dataloaders, StandardizeLabel, V4ResampleTransform
+from mecheeg.encoders import load_encoder, MODEL_CARDS
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -42,7 +42,7 @@ _V2_DIR = ROOT / "checkpoints" / "pretrained" / "SleepFM v2 Models"
 MODELS = {
     "sleepfm": dict(
         display_name = MODEL_CARDS["sleepfm"]["display_name"],
-        xae_ckpt     = ROOT / "results" / "xae" / "sleepfm" / "xae_checkpoint.pt",
+        spectral_decoder_ckpt     = ROOT / "results" / "spectral_decoder" / "sleepfm" / "spectral_decoder_checkpoint.pt",
         data_path    = ROOT / "data" / "D4-v3-preprocessed-v2",
         target_layer = 2,
         patch_size   = 128,
@@ -51,7 +51,7 @@ MODELS = {
     ),
     "sleepfm_v2.0": dict(
         display_name = MODEL_CARDS["sleepfm_v2.0"]["display_name"],
-        xae_ckpt     = ROOT / "results" / "xae" / "sleepfm_v2.0" / "xae_checkpoint.pt",
+        spectral_decoder_ckpt     = ROOT / "results" / "spectral_decoder" / "sleepfm_v2.0" / "spectral_decoder_checkpoint.pt",
         data_path    = ROOT / "data" / "D4-v3-preprocessed-v2",
         target_layer = 5,
         patch_size   = 640,
@@ -60,7 +60,7 @@ MODELS = {
     ),
     "sleepfm_v2.1": dict(
         display_name = MODEL_CARDS["sleepfm_v2.1"]["display_name"],
-        xae_ckpt     = ROOT / "results" / "xae" / "sleepfm_v2.1" / "xae_checkpoint.pt",
+        spectral_decoder_ckpt     = ROOT / "results" / "spectral_decoder" / "sleepfm_v2.1" / "spectral_decoder_checkpoint.pt",
         data_path    = ROOT / "data" / "D4-v3-preprocessed-v2",
         target_layer = 5,
         patch_size   = 640,
@@ -69,7 +69,7 @@ MODELS = {
     ),
     "sleepfm_v2.3": dict(
         display_name = MODEL_CARDS["sleepfm_v2.3"]["display_name"],
-        xae_ckpt     = ROOT / "results" / "xae" / "sleepfm_v2.3" / "xae_checkpoint.pt",
+        spectral_decoder_ckpt     = ROOT / "results" / "spectral_decoder" / "sleepfm_v2.3" / "spectral_decoder_checkpoint.pt",
         data_path    = ROOT / "data" / "D4-v3-preprocessed-v2",
         target_layer = 5,
         patch_size   = 640,
@@ -78,7 +78,7 @@ MODELS = {
     ),
     "sleepfm_v2.4": dict(
         display_name = MODEL_CARDS["sleepfm_v2.4"]["display_name"],
-        xae_ckpt     = ROOT / "results" / "xae" / "sleepfm_v2.4" / "xae_checkpoint.pt",
+        spectral_decoder_ckpt     = ROOT / "results" / "spectral_decoder" / "sleepfm_v2.4" / "spectral_decoder_checkpoint.pt",
         data_path    = ROOT / "data" / "D4-v3-preprocessed-v2",
         target_layer = 5,
         patch_size   = 640,
@@ -87,7 +87,7 @@ MODELS = {
     ),
     "sleepfm_v2.5": dict(
         display_name = MODEL_CARDS["sleepfm_v2.5"]["display_name"],
-        xae_ckpt     = ROOT / "results" / "xae" / "sleepfm_v2.5" / "xae_checkpoint.pt",
+        spectral_decoder_ckpt     = ROOT / "results" / "spectral_decoder" / "sleepfm_v2.5" / "spectral_decoder_checkpoint.pt",
         data_path    = ROOT / "data" / "D4-v3-preprocessed-v2",
         target_layer = 5,
         patch_size   = 640,
@@ -96,7 +96,7 @@ MODELS = {
     ),
     "sleepfm_v2.6": dict(
         display_name = MODEL_CARDS["sleepfm_v2.6"]["display_name"],
-        xae_ckpt     = ROOT / "results" / "xae" / "sleepfm_v2.6" / "xae_checkpoint.pt",
+        spectral_decoder_ckpt     = ROOT / "results" / "spectral_decoder" / "sleepfm_v2.6" / "spectral_decoder_checkpoint.pt",
         data_path    = ROOT / "data" / "D4-v3-preprocessed-v2",
         target_layer = 5,
         patch_size   = 128,
@@ -105,7 +105,7 @@ MODELS = {
     ),
     "sleepfm_v2.7": dict(
         display_name = MODEL_CARDS["sleepfm_v2.7"]["display_name"],
-        xae_ckpt     = ROOT / "results" / "xae" / "sleepfm_v2.7" / "xae_checkpoint.pt",
+        spectral_decoder_ckpt     = ROOT / "results" / "spectral_decoder" / "sleepfm_v2.7" / "spectral_decoder_checkpoint.pt",
         data_path    = ROOT / "data" / "D4-v3-preprocessed-v2",
         target_layer = 5,
         patch_size   = 128,
@@ -114,7 +114,7 @@ MODELS = {
     ),
     "sleepfm_granular": dict(
         display_name = MODEL_CARDS["sleepfm_granular"]["display_name"],
-        xae_ckpt     = ROOT / "results" / "xae" / "sleepfm_granular" / "xae_checkpoint.pt",
+        spectral_decoder_ckpt     = ROOT / "results" / "spectral_decoder" / "sleepfm_granular" / "spectral_decoder_checkpoint.pt",
         data_path    = ROOT / "data" / "D4-v4-preprocessed-10s",
         target_layer = 2,
         patch_size   = 128,
@@ -123,7 +123,7 @@ MODELS = {
     ),
     "reve": dict(
         display_name = MODEL_CARDS["reve"]["display_name"],
-        xae_ckpt     = ROOT / "results" / "xae" / "reve_qjbe08" / "xae_checkpoint.pt",
+        spectral_decoder_ckpt     = ROOT / "results" / "spectral_decoder" / "reve_qjbe08" / "spectral_decoder_checkpoint.pt",
         data_path    = ROOT / "data" / "D4-v3-preprocessed-v1",
         target_layer = 21,
         patch_size   = 200,
@@ -132,7 +132,7 @@ MODELS = {
     ),
     "labram": dict(
         display_name = MODEL_CARDS["labram"]["display_name"],
-        xae_ckpt     = ROOT / "results" / "xae" / "labram" / "xae_checkpoint.pt",
+        spectral_decoder_ckpt     = ROOT / "results" / "spectral_decoder" / "labram" / "spectral_decoder_checkpoint.pt",
         data_path    = ROOT / "data" / "D4-v3-preprocessed-v1",
         target_layer = 11,
         patch_size   = 200,
@@ -155,17 +155,17 @@ MAX_TOKENS = 5_000   # enough for stable statistics without OOM
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _load_xae(cfg: dict) -> XAETrainer:
-    """Restore a trained XAETrainer from checkpoint (weights + normalisation)."""
-    ckpt_path = cfg["xae_ckpt"]
+def _load_spectral_decoder(cfg: dict) -> SpectralDecoderTrainer:
+    """Restore a trained SpectralDecoderTrainer from checkpoint (weights + normalisation)."""
+    ckpt_path = cfg["spectral_decoder_ckpt"]
     if not ckpt_path.exists():
-        raise FileNotFoundError(f"XAE checkpoint not found: {ckpt_path}")
+        raise FileNotFoundError(f"SpectralDecoder checkpoint not found: {ckpt_path}")
 
     ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=False)
     sc   = ckpt["spectral_config"]
     mc   = ckpt["model_config"]
 
-    trainer = XAETrainer(
+    trainer = SpectralDecoderTrainer(
         embed_dim   = mc["embed_dim"],
         fs          = sc["fs"],
         n_fft       = sc["n_fft"],
@@ -175,8 +175,8 @@ def _load_xae(cfg: dict) -> XAETrainer:
         n_blocks    = mc.get("n_blocks", 3),
         device      = DEVICE,
     )
-    trainer.xae.load_state_dict(ckpt["xae_state_dict"])
-    trainer.xae.eval().to(DEVICE)
+    trainer.spectral_decoder.load_state_dict(ckpt["spectral_decoder_state_dict"])
+    trainer.spectral_decoder.eval().to(DEVICE)
     trainer.embed_mean  = ckpt["embed_mean"].to(DEVICE)
     trainer.embed_std   = ckpt["embed_std"].to(DEVICE)
     trainer.target_mean = ckpt["target_mean"].to(DEVICE)
@@ -185,7 +185,7 @@ def _load_xae(cfg: dict) -> XAETrainer:
 
 
 def _compute_metrics(
-    trainer: XAETrainer,
+    trainer: SpectralDecoderTrainer,
     encoder,
     val_loader,
     target_layer: int,
@@ -206,7 +206,7 @@ def _compute_metrics(
     embeddings = embeddings.to(DEVICE)
     emb_norm = (embeddings - trainer.embed_mean) / trainer.embed_std
     with torch.no_grad():
-        pred_norm = trainer.xae.decode(emb_norm)
+        pred_norm = trainer.spectral_decoder.decode(emb_norm)
     pred = (pred_norm * trainer.target_std + trainer.target_mean).cpu()
     targets = targets.cpu()
 
@@ -366,7 +366,7 @@ def _plot_overall_summary(results: dict[str, dict], save_path: Path):
     ax2.set_axisbelow(True)
     ax2.legend(fontsize=9)
 
-    fig.suptitle("XAE Reconstruction Comparison — All SleepFM Variants",
+    fig.suptitle("SpectralDecoder Reconstruction Comparison — All SleepFM Variants",
                  fontsize=15, fontweight="bold")
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     fig.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -377,7 +377,7 @@ def _plot_overall_summary(results: dict[str, dict], save_path: Path):
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
-    out_dir = ROOT / "results" / "xae"
+    out_dir = ROOT / "results" / "spectral_decoder"
     results: dict[str, dict] = {}
 
     for model_key, cfg in MODELS.items():
@@ -386,8 +386,8 @@ def main():
         print(f"  {display}  ({model_key})")
         print(f"{'='*60}")
 
-        if not cfg["xae_ckpt"].exists():
-            print(f"  SKIP — checkpoint not found: {cfg['xae_ckpt']}")
+        if not cfg["spectral_decoder_ckpt"].exists():
+            print(f"  SKIP — checkpoint not found: {cfg['spectral_decoder_ckpt']}")
             continue
 
         # Load encoder
@@ -396,9 +396,9 @@ def main():
         encoder = load_encoder(model_key, weights_path=str(wp) if wp is not None else None)
         encoder.to(DEVICE).eval()
 
-        # Load XAE
-        print("  Loading XAE checkpoint…", flush=True)
-        trainer = _load_xae(cfg)
+        # Load SpectralDecoder
+        print("  Loading SpectralDecoder checkpoint…", flush=True)
+        trainer = _load_spectral_decoder(cfg)
 
         # Load validation data
         print("  Loading validation data…", flush=True)
@@ -440,28 +440,28 @@ def main():
 
     _plot_overall_summary(
         results,
-        save_path=out_dir / "xae_comparison_overall.png",
+        save_path=out_dir / "spectral_decoder_comparison_overall.png",
     )
     _plot_band_comparison(
         results,
         metric_key="band_amp_r2",
         ylabel="R²",
-        title="XAE Amplitude Reconstruction R² by Clinical Band",
-        save_path=out_dir / "xae_comparison_amplitude.png",
+        title="SpectralDecoder Amplitude Reconstruction R² by Clinical Band",
+        save_path=out_dir / "spectral_decoder_comparison_amplitude.png",
         ylim=(0, 1.0),
     )
     _plot_band_comparison(
         results,
         metric_key="band_phase_cosim",
         ylabel="Cosine similarity (1 = perfect, 0 = chance)",
-        title="XAE Phase Reconstruction Quality by Clinical Band",
-        save_path=out_dir / "xae_comparison_phase.png",
+        title="SpectralDecoder Phase Reconstruction Quality by Clinical Band",
+        save_path=out_dir / "spectral_decoder_comparison_phase.png",
         ylim=(-0.3, 1.0),
         chance_line=0.0,
     )
 
     # Save metrics as JSON for the Streamlit comparison page
-    json_path = out_dir / "xae_comparison_metrics.json"
+    json_path = out_dir / "spectral_decoder_comparison_metrics.json"
     serialisable = {
         k: {
             "display_name": v["display_name"],

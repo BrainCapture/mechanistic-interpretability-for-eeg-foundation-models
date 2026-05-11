@@ -7,7 +7,7 @@ Produces only what the monosemanticity taxonomy classifier needs:
     feature_stats            list[dict]  — per-feature {fire_rate_pct}
     meta                     dict        — {n_features, k, target_layer, encoder, expansion}
 
-Skips everything else build_app_cache.py builds (XAE spectral decoding, codebook
+Skips everything else build_app_cache.py builds (SpectralDecoder spectral decoding, codebook
 UMAP, morphology probe, dashboards, co-occurrence, etc.). Result: ~3-5 min per
 cell on L4 instead of ~12-15 min for the full app_cache pipeline. Saves to::
 
@@ -41,9 +41,9 @@ from scipy.stats import mannwhitneyu as _mwu
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from sae4eeg.dataset import H5PYDatasetLabeled, StandardizeLabel, V4ResampleTransform
-from sae4eeg.encoders import EncoderBackend, load_encoder
-from sae4eeg.sae import ActivationExtractor, SparseAutoencoder
+from mecheeg.dataset import H5PYDatasetLabeled, StandardizeLabel, V4ResampleTransform
+from mecheeg.encoders import EncoderBackend, load_encoder
+from mecheeg.sae import ActivationExtractor, SparseAutoencoder
 
 ROOT   = Path(__file__).resolve().parent.parent
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

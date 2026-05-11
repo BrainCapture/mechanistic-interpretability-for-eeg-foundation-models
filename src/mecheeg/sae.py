@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from typing import Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sae4eeg.encoders import EncoderBackend
+    from mecheeg.encoders import EncoderBackend
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -271,7 +271,7 @@ class SAETrainer:
         dict mapping layer_idx → Tensor of shape (N_tokens, E).
         N_tokens is capped at ``max_tokens`` if provided.
         """
-        from sae4eeg.encoders import EncoderBackend as _EB  # local import
+        from mecheeg.encoders import EncoderBackend as _EB  # local import
 
         n_prefix_tokens = getattr(encoder, "n_prefix_tokens", 0)
         if isinstance(encoder, _EB):

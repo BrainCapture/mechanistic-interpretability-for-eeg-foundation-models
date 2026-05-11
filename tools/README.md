@@ -13,16 +13,16 @@ The pipeline is sequential — later steps depend on outputs from earlier steps.
                             └─────────┬──────────┘
                                       │  binary normal/abnormal
                                       ▼
-                        finetune_{sleepfm_v2,reve,labram}_binary.py
+                        finetune_{sleepfm_v1,reve,labram}_binary.py
                                       │
                                       ▼
                               train_sae_layers.py
                               train_sae_expansions.py
                                       │
                                       ▼
-                                 train_xae.py
-                                 bootstrap_xae_ci.py
-                                 compare_xae.py
+                                 train_spectral_decoder.py
+                                 bootstrap_spectral_decoder_ci.py
+                                 compare_spectral_decoder.py
                                       │
                                       ▼
                               build_app_cache.py
@@ -49,13 +49,13 @@ The pipeline is sequential — later steps depend on outputs from earlier steps.
 | `finetune_labram_binary.py` | LaBraM binary-finetuned checkpoint | §3 |
 | `train_sae_layers.py` | TopK SAE on each encoder layer | §3.1, Fig 2 |
 | `train_sae_expansions.py` | Expansion sweep (E=1..64) at a single layer | §3.2, Fig 3, Fig 7 |
-| `train_xae.py` | Spectral decoder (XAE) per encoder | §2 |
-| `bootstrap_xae_ci.py` | Per-token bootstrap CIs for XAE R² | §2 |
-| `compare_xae.py` | Cross-model XAE R² comparison | §2 (helper for `bootstrap_xae_ci`) |
+| `train_spectral_decoder.py` | Spectral decoder per encoder | §2 |
+| `bootstrap_spectral_decoder_ci.py` | Per-token bootstrap CIs for spectral decoder R² | §2 |
+| `compare_spectral_decoder.py` | Cross-model spectral decoder R² comparison | §2 (helper for `bootstrap_spectral_decoder_ci`) |
 | `build_app_cache.py` | Per-experiment feature-enrichment + spectral cache | infrastructure (used by steering / taxonomy caches) |
 | `build_taxonomy_cache.py` | Pre-computed monosemanticity taxonomy fractions | Fig 3 |
 | `build_steering_cache.py` | Per-experiment steering tokens + metadata | §5, Fig 4/5/6 |
-| `run_tcav.py` | TCAV scores (3 variants — see `src/sae4eeg/tcav.py`) | §4, Fig 4 |
+| `run_tcav.py` | TCAV scores (3 variants — see `src/mecheeg/tcav.py`) | §4, Fig 4 |
 | `analyze_monosemanticity.py` | Per-feature category-discrimination test | §3.1 (epileptiform null result) |
 | `probe_layer_sweep_kfold.py` | 5-fold AUROC of linear probe under SAE substitution at each layer | §3.2, Fig 2 |
 | `probe_table_finetune_sae.py` | Operating-layer SAE-faithfulness table (per encoder) | §3.2 (table) |

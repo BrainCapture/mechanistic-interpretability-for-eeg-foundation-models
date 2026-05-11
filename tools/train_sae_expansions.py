@@ -25,9 +25,9 @@ from pathlib import Path
 
 import torch
 
-from sae4eeg.sae import SAETrainer, sae_diagnostics
-from sae4eeg.dataset import StandardizeLabel, V4ResampleTransform, get_dataloaders
-from sae4eeg.encoders import load_encoder
+from mecheeg.sae import SAETrainer, sae_diagnostics
+from mecheeg.dataset import StandardizeLabel, V4ResampleTransform, get_dataloaders
+from mecheeg.encoders import load_encoder
 
 ROOT   = Path(__file__).resolve().parent.parent
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

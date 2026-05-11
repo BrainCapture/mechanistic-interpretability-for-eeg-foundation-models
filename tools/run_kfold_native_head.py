@@ -53,9 +53,9 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import GroupKFold
 
-from sae4eeg.dataset import H5PYDatasetLabeled, StandardizeLabel
-from sae4eeg.encoders import load_encoder
-from sae4eeg.sae import SparseAutoencoder, SAETrainer
+from mecheeg.dataset import H5PYDatasetLabeled, StandardizeLabel
+from mecheeg.encoders import load_encoder
+from mecheeg.sae import SparseAutoencoder, SAETrainer
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 KFOLD_DIR = ROOT / "results" / "kfold"

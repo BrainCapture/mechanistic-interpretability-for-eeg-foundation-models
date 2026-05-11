@@ -38,9 +38,9 @@ from torch.utils.data import DataLoader, TensorDataset
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from sae4eeg.dataset import StandardizeLabel, get_dataloaders
-from sae4eeg.encoders import load_encoder
-from sae4eeg.sae import SparseAutoencoder
+from mecheeg.dataset import StandardizeLabel, get_dataloaders
+from mecheeg.encoders import load_encoder
+from mecheeg.sae import SparseAutoencoder
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 OUT_DIR = ROOT / "results" / "probe_reconstruction"

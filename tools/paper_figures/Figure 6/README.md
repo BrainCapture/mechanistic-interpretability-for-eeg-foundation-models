@@ -18,9 +18,9 @@ Self-contained: reads `data.npz` (7 KB) next to the script. Produces `figure.png
 
 `data.npz` bundles the pre-decoded spectra for:
 
-- Source mean: SleepFM L2 abnormal-EEG token embeddings decoded through SAE + XAE
+- Source mean: SleepFM L2 abnormal-EEG token embeddings decoded through SAE + spectral decoder
 - Target mean ± 95% subject-bootstrap CI: normal-EEG token embeddings decoded the same way (across 579 subjects)
 - Two steered spectra (n=104 and n=164 top TCAV-ranked features clamped to the target centroid)
 - Metric values M1 (spectral-distance reduction) and M2 (probe-recovery score)
 
-Extraction was done from the development repo using the per-experiment app cache (`metadata.json` + `app_cache.pt`), the trained SAE checkpoint, the trained XAE checkpoint (~66 MB; stored in cloud bucket — not shipped), and the steering cache. The result is a 7 KB npz that fully specifies the figure.
+Extraction was done from the development repo using the per-experiment app cache (`metadata.json` + `app_cache.pt`), the trained SAE checkpoint, the trained spectral decoder checkpoint (~66 MB; stored in cloud bucket — not shipped), and the steering cache. The result is a 7 KB npz that fully specifies the figure.

@@ -1,7 +1,7 @@
 """Build App Cache for the SAE4EEG Interactive Explorer.
 
 Reads a named experiment from ``results/experiments/<name>/metadata.json``,
-loads the corresponding SAE, XAE and codebook artefacts, computes every
+loads the corresponding SAE, SpectralDecoder and codebook artefacts, computes every
 datum the Streamlit app needs, and writes a single self-contained
 ``results/experiments/<name>/app_cache.pt``.
 
@@ -87,10 +87,10 @@ import torch
 import numpy as np
 
 # ── project imports ─────────────────────────────────────────────────────────
-from sae4eeg.xae import XAETrainer, CLINICAL_BANDS
-from sae4eeg.sae import SparseAutoencoder, ActivationExtractor
-from sae4eeg.dataset import get_dataloaders, StandardizeLabel, H5PYDatasetLabeled, V4ResampleTransform
-from sae4eeg.encoders import load_encoder
+from mecheeg.spectral_decoder import SpectralDecoderTrainer, CLINICAL_BANDS
+from mecheeg.sae import SparseAutoencoder, ActivationExtractor
+from mecheeg.dataset import get_dataloaders, StandardizeLabel, H5PYDatasetLabeled, V4ResampleTransform
+from mecheeg.encoders import load_encoder
 
 # ── paths ────────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent.parent
@@ -146,7 +146,7 @@ def _load_model(encoder_name: str = "sleepfm", weights_path=None):
     return encoder.to(DEVICE).eval()
 
 
-def _collect_tokens(model, xae_trainer, val_loader, max_tokens):
+def _collect_tokens(model, spectral_decoder_trainer, val_loader, max_tokens):
     """Collect embeddings, spectral targets, raw patches, and labels.
 
     Handles both SleepFM (cross-channel tokens) and REVE (per-channel tokens).
@@ -157,7 +157,7 @@ def _collect_tokens(model, xae_trainer, val_loader, max_tokens):
     activation the SAE was trained against. For the SetTransformer legacy
     path (non-backend), the same ``TARGET_LAYER`` is used for the hook key.
     """
-    from sae4eeg.encoders import EncoderBackend
+    from mecheeg.encoders import EncoderBackend
 
     is_backend = isinstance(model, EncoderBackend)
     reve_mode  = is_backend and hasattr(model, "channel_names")
@@ -236,7 +236,7 @@ def _collect_tokens(model, xae_trainer, val_loader, max_tokens):
         if total == 0:
             tokens_per_window = n_new // B
 
-        spec_targets = xae_trainer.spectral.extract(patches)
+        spec_targets = spectral_decoder_trainer.spectral.extract(patches)
         embed_list.append(layer_acts.reshape(n_new, -1).cpu())
         spec_list.append(spec_targets.cpu())
         raw_list.append(patches.cpu())
@@ -313,7 +313,7 @@ def _collect_token_metadata(val_dataset, fields, n_tokens, tokens_per_window):
 # Section builders
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _build_feature_section(meta, xae_trainer, embeddings=None, token_labels=None,
+def _build_feature_section(meta, spectral_decoder_trainer, embeddings=None, token_labels=None,
                            token_meta=None, enr_embeddings=None, enr_token_meta=None):
     """Build the Feature Explorer section of the cache."""
     print("\n[Feature Explorer]")
@@ -510,7 +510,7 @@ def _build_feature_section(meta, xae_trainer, embeddings=None, token_labels=None
         print("  [warn] No tokens available — fire rates / label correlations "
               "will be absent from the cache")
 
-    # -- Decode feature directions through XAE ------------------------
+    # -- Decode feature directions through SpectralDecoder ------------------------
     # Decoder weight columns are the feature directions
     directions = sae.decoder.weight.T.detach().clone()  # (n_features, 128)
     baseline_raw = act_mean.unsqueeze(0)                # (1, 128)
@@ -518,9 +518,9 @@ def _build_feature_section(meta, xae_trainer, embeddings=None, token_labels=None
     raw_dirs = directions * act_std
     activated_raw = baseline_raw + alpha * raw_dirs     # (n_features, 128)
 
-    amp_base, _, _ = xae_trainer.decode_direction(
+    amp_base, _, _ = spectral_decoder_trainer.decode_direction(
         baseline_raw.to(DEVICE), denormalise=True)
-    amp_act, _, _  = xae_trainer.decode_direction(
+    amp_act, _, _  = spectral_decoder_trainer.decode_direction(
         activated_raw.to(DEVICE), denormalise=True)
     amp_base = amp_base.squeeze(0).cpu()                # (n_bins,)
     amp_act  = amp_act.cpu()                             # (n_features, n_bins)
@@ -528,7 +528,7 @@ def _build_feature_section(meta, xae_trainer, embeddings=None, token_labels=None
 
     # -- Per-feature per-band differential power ----------------------
     band_names = list(CLINICAL_BANDS.keys())
-    freqs = xae_trainer.spectral.freqs                   # (n_bins,) ndarray
+    freqs = spectral_decoder_trainer.spectral.freqs                   # (n_bins,) ndarray
     feature_band_deltas = np.zeros((n_features, len(band_names)),
                                    dtype=np.float32)
     for j, (bname, (f_lo, f_hi)) in enumerate(CLINICAL_BANDS.items()):
@@ -707,7 +707,7 @@ def _build_layer_umap_section(layer_acts: dict, layer_indices: list,
     }
 
 
-def _build_morphology_section(model, codebook, xae_trainer,
+def _build_morphology_section(model, codebook, spectral_decoder_trainer,
                               val_loader, n_batches_scale=5,
                               patch_size=128, target_layer=None):
     """Build the Morphology Probe section of the cache."""
@@ -722,7 +722,7 @@ def _build_morphology_section(model, codebook, xae_trainer,
 
     # Estimate real data scale for normalisation
     data_mean, data_std = estimate_data_scale(
-        xae_trainer, model, val_loader, n_batches=n_batches_scale)
+        spectral_decoder_trainer, model, val_loader, n_batches=n_batches_scale)
     print(f"  Data scale: mean={data_mean:.4f}, std={data_std:.4f}")
 
     sort_order = codebook["sort_order"].numpy()
@@ -754,7 +754,7 @@ def _build_morphology_section(model, codebook, xae_trainer,
         else:
             mr = None
         sizes = [int(codebook["cluster_sizes"][c_id]) for c_id in top_idx]
-        dom_bands = [get_dominant_band(codebook, c_id, xae_trainer)
+        dom_bands = [get_dominant_band(codebook, c_id, spectral_decoder_trainer)
                      for c_id in top_idx]
 
         names.append(name)
@@ -867,15 +867,15 @@ def main():
     model = _load_model(encoder_name, weights_path=weights_path)
     print(f"  {encoder_name} encoder loaded (embed_dim={encoder_embed})")
 
-    xae_trainer = XAETrainer(embed_dim=encoder_embed, device=DEVICE)
-    xae_trainer.load(str(ROOT / meta["xae_checkpoint"]))
-    xae_trainer.xae.to(DEVICE).eval()
+    spectral_decoder_trainer = SpectralDecoderTrainer(embed_dim=encoder_embed, device=DEVICE)
+    spectral_decoder_trainer.load(str(ROOT / meta["spectral_decoder_checkpoint"]))
+    spectral_decoder_trainer.spectral_decoder.to(DEVICE).eval()
     # Move normalisation stats to the same device as the model
     for attr in ("embed_mean", "embed_std", "target_mean", "target_std"):
-        val = getattr(xae_trainer, attr, None)
+        val = getattr(spectral_decoder_trainer, attr, None)
         if val is not None:
-            setattr(xae_trainer, attr, val.to(DEVICE))
-    print("  XAE loaded")
+            setattr(spectral_decoder_trainer, attr, val.to(DEVICE))
+    print("  SpectralDecoder loaded")
 
     codebook = torch.load(ROOT / meta["codebook_path"],
                           weights_only=False, map_location="cpu")
@@ -900,7 +900,7 @@ def main():
     # ── Collect tokens ────────────────────────────────────────────────
     print(f"\n[Collecting up to {args.max_tokens} validation tokens]")
     embeddings, _, _, token_labels, tokens_per_window = _collect_tokens(
-        model, xae_trainer, val_loader, args.max_tokens)
+        model, spectral_decoder_trainer, val_loader, args.max_tokens)
     print(f"  Collected {len(embeddings)} tokens  "
           f"({tokens_per_window} tokens/window)")
 
@@ -946,7 +946,7 @@ def main():
                              shuffle=False, num_workers=0)
 
     enr_embeddings, _, _, enr_token_labels, _ = _collect_tokens(
-        model, xae_trainer, enr_loader, enr_max_tokens)
+        model, spectral_decoder_trainer, enr_loader, enr_max_tokens)
     print(f"  Collected {len(enr_embeddings)} enrichment tokens")
     enr_token_meta = _collect_token_metadata(
         full_ds, METADATA_FIELDS, len(enr_embeddings), tokens_per_window)
@@ -980,7 +980,7 @@ def main():
     if token_labels is not None:
         cache["token_label_classes"] = token_labels.numpy()   # (N,) int, val-set per-token label
 
-    cache.update(_build_feature_section(meta, xae_trainer, embeddings, token_labels,
+    cache.update(_build_feature_section(meta, spectral_decoder_trainer, embeddings, token_labels,
                                          token_meta, enr_embeddings, enr_token_meta))
 
     if not args.skip_umap:
@@ -991,7 +991,7 @@ def main():
 
     if args.layer_umap_layers:
         layer_indices = sorted(int(x) for x in args.layer_umap_layers.split(","))
-        from sae4eeg.sae import SAETrainer
+        from mecheeg.sae import SAETrainer
         trainer_tmp = SAETrainer(
             embed_dim=encoder_embed, target_layers=layer_indices, device=DEVICE)
         print(f"\n[Layer UMAPs] Collecting activations for layers {layer_indices} "
@@ -1014,7 +1014,7 @@ def main():
         )
         _, _, val_loader2, _ = next(gen2)
         cache.update(_build_morphology_section(
-            model, codebook, xae_trainer, val_loader2,
+            model, codebook, spectral_decoder_trainer, val_loader2,
             patch_size=encoder_patch, target_layer=encoder_layer))
     else:
         print("\n[Morphology Probe] Skipped (--skip-morphology)")

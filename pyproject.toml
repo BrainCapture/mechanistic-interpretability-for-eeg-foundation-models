@@ -1,5 +1,5 @@
 [project]
-name = "sae4eeg"
+name = "mecheeg"
 version = "1.0.0"
 description = "Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders (NeurIPS 2026)"
 readme = "README.md"

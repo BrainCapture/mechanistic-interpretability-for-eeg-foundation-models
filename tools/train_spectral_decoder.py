@@ -1,8 +1,8 @@
 """
-Train XAE — Spectral Explain-AE for EEG token interpretability
+Train SpectralDecoder — Spectral Explain-AE for EEG token interpretability
 ================================================================
 
-Trains the ExplainAE that maps encoder token embeddings to
+Trains the SpectralDecoder that maps encoder token embeddings to
 narrow-band Fourier components (amplitude + phase).
 
 Once trained, any direction in embedding space (e.g. SAE feature
@@ -11,15 +11,15 @@ time-domain waveforms are reconstructed at display-time via
 **zero-phase iFFT** from the predicted amplitudes — no temporal
 head needed (see ``spectral_to_waveforms()``).
 
-Outputs (in results/xae/{encoder}/):
-  xae_checkpoint.pt            — trained XAE model + normalisation stats
+Outputs (in results/spectral_decoder/{encoder}/):
+  spectral_decoder_checkpoint.pt            — trained SpectralDecoder model + normalisation stats
   training_curves.png          — loss curves (amplitude, phase, round-trip)
   spectral_sanity_check.png    — predicted vs ground-truth spectra
   r2_distribution.png          — per-token R² histogram + per-band R²
 
 Usage:
-  uv run tools/train_xae.py --encoder sleepfm
-  uv run tools/train_xae.py --encoder reve
+  uv run tools/train_spectral_decoder.py --encoder sleepfm
+  uv run tools/train_spectral_decoder.py --encoder reve
 """
 
 import argparse
@@ -34,10 +34,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 # ── project imports ─────────────────────────────────────────────────────────
-from sae4eeg.xae import (SpectralTargetExtractor, TemporalTargetExtractor,
-                 XAETrainer, CLINICAL_BANDS)
-from sae4eeg.dataset import get_dataloaders, StandardizeLabel, V4ResampleTransform
-from sae4eeg.encoders import load_encoder
+from mecheeg.spectral_decoder import (SpectralTargetExtractor, TemporalTargetExtractor,
+                 SpectralDecoderTrainer, CLINICAL_BANDS)
+from mecheeg.dataset import get_dataloaders, StandardizeLabel, V4ResampleTransform
+from mecheeg.encoders import load_encoder
 
 # ── paths & constants ───────────────────────────────────────────────────────
 ROOT        = Path(__file__).resolve().parent.parent
@@ -142,7 +142,7 @@ TEMPORAL_CORR_WEIGHT = 1.0  # (unused when TEMPORAL=False)
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Train XAE spectral decoder")
+    p = argparse.ArgumentParser(description="Train SpectralDecoder spectral decoder")
     _all_encoders = ["sleepfm", "sleepfm_v2.0", "sleepfm_v2.1", "sleepfm_v2.3", "sleepfm_v2.4", "sleepfm_v2.5", "sleepfm_v2.6", "sleepfm_v2.7", "sleepfm_granular", "reve", "labram"]
     p.add_argument("--encoder", default="sleepfm", choices=_all_encoders,
                    help="Encoder backend (default: sleepfm)")
@@ -152,7 +152,7 @@ def parse_args():
                    help="Path to finetuned checkpoint (REVE .ckpt or SleepFM .pt)")
     p.add_argument("--tag", default=None,
                    help="Short label appended to the output directory "
-                        "(e.g. 'qjbe08' → results/xae/reve_qjbe08/). "
+                        "(e.g. 'qjbe08' → results/spectral_decoder/reve_qjbe08/). "
                         "Use to keep finetuned runs separate from the base model.")
     return p.parse_args()
 
@@ -209,7 +209,7 @@ def load_data(data_path: Path):
 # Sanity-check plot: predicted vs ground-truth spectra
 # ═════════════════════════════════════════════════════════════════════════════
 
-def plot_sanity_check(trainer: XAETrainer, model, val_loader, save_path,
+def plot_sanity_check(trainer: SpectralDecoderTrainer, model, val_loader, save_path,
                       target_layer: int, pool_channels: bool = False,
                       n_examples=6):
     """
@@ -224,9 +224,9 @@ def plot_sanity_check(trainer: XAETrainer, model, val_loader, save_path,
 
     # Normalise & predict
     emb_norm = (embeddings - trainer.embed_mean) / trainer.embed_std
-    trainer.xae.eval()
+    trainer.spectral_decoder.eval()
     with torch.no_grad():
-        pred_norm = trainer.xae.decode(emb_norm)
+        pred_norm = trainer.spectral_decoder.decode(emb_norm)
     pred = pred_norm * trainer.target_std + trainer.target_mean
 
     spectral = trainer.spectral
@@ -286,7 +286,7 @@ def plot_sanity_check(trainer: XAETrainer, model, val_loader, save_path,
         ax = axes[row, 0]
         ax.fill_between(freqs, gt_amp_lin, alpha=0.15, color="black", label="GT")
         ax.plot(freqs, gt_amp_lin, "k-", linewidth=1.5, alpha=0.8)
-        ax.plot(freqs, pr_amp_lin, "r-", linewidth=1.5, alpha=0.85, label="XAE pred")
+        ax.plot(freqs, pr_amp_lin, "r-", linewidth=1.5, alpha=0.85, label="SpectralDecoder pred")
 
         # Shade clinical bands
         for band_name, (lo, hi) in CLINICAL_BANDS.items():
@@ -326,7 +326,7 @@ def plot_sanity_check(trainer: XAETrainer, model, val_loader, save_path,
         w = 0.35
         ax3.bar(x - w/2, gt_band_pow, w, label="Ground truth",
                           color=[band_colors[b] for b in band_names], alpha=0.7)
-        ax3.bar(x + w/2, pr_band_pow, w, label="XAE prediction",
+        ax3.bar(x + w/2, pr_band_pow, w, label="SpectralDecoder prediction",
                           color=[band_colors[b] for b in band_names], alpha=0.4,
                           edgecolor="red", linewidth=1.5)
         ax3.set_xticks(x)
@@ -337,7 +337,7 @@ def plot_sanity_check(trainer: XAETrainer, model, val_loader, save_path,
         ax3.grid(True, alpha=0.15, axis="y")
 
     fig.suptitle(
-        f"XAE Sanity Check — Predicted vs Ground-Truth Spectra\n"
+        f"SpectralDecoder Sanity Check — Predicted vs Ground-Truth Spectra\n"
         f"Median R² = {np.nanmedian(per_r2):.4f}    "
         f"(valid: {valid_mask.sum()}/{len(per_r2)} tokens, "
         f"{(valid_r2 > 0.8).sum()} with R²>0.8)",
@@ -390,7 +390,7 @@ def plot_sanity_check(trainer: XAETrainer, model, val_loader, save_path,
     ax_band.grid(True, alpha=0.15, axis="y")
     ax_band.tick_params(axis="x", rotation=30)
 
-    fig2.suptitle("XAE Reconstruction Quality Summary", fontsize=14, fontweight="bold")
+    fig2.suptitle("SpectralDecoder Reconstruction Quality Summary", fontsize=14, fontweight="bold")
     fig2.tight_layout(rect=[0, 0, 1, 0.95])
     fig2.savefig(r2_plot_path, dpi=150, bbox_inches="tight")
     plt.close(fig2)
@@ -461,7 +461,7 @@ def plot_training_curves(history, save_path):
         ax.legend(lines1 + lines2, labels1 + labels2, fontsize=8, loc="center right")
         ax.grid(True, alpha=0.2)
 
-    fig.suptitle("XAE Training Curves", fontsize=15, fontweight="bold")
+    fig.suptitle("SpectralDecoder Training Curves", fontsize=15, fontweight="bold")
     fig.tight_layout()
     fig.savefig(save_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -472,7 +472,7 @@ def plot_training_curves(history, save_path):
 # Temporal sanity check: predicted vs ground-truth band waveforms
 # ═════════════════════════════════════════════════════════════════════════════
 
-def plot_temporal_sanity_check(trainer: XAETrainer, model, val_loader,
+def plot_temporal_sanity_check(trainer: SpectralDecoderTrainer, model, val_loader,
                                 save_path, target_layer: int,
                                 pool_channels: bool = False, n_examples=4):
     """
@@ -491,9 +491,9 @@ def plot_temporal_sanity_check(trainer: XAETrainer, model, val_loader,
 
     # Normalise & predict
     emb_norm = (embeddings - trainer.embed_mean) / trainer.embed_std
-    trainer.xae.eval()
+    trainer.spectral_decoder.eval()
     with torch.no_grad():
-        pred_norm = trainer.xae.decode_temporal(emb_norm)
+        pred_norm = trainer.spectral_decoder.decode_temporal(emb_norm)
     pred = pred_norm * trainer.temporal_std + trainer.temporal_mean
 
     band_names = list(CLINICAL_BANDS.keys())
@@ -556,7 +556,7 @@ def plot_temporal_sanity_check(trainer: XAETrainer, model, val_loader,
 
             ax.plot(t_axis, gt_wave, "k-", linewidth=1.5, alpha=0.8, label="GT")
             ax.plot(t_axis, pr_wave, "-", color=band_colors[band_name],
-                    linewidth=1.5, alpha=0.85, label="XAE")
+                    linewidth=1.5, alpha=0.85, label="SpectralDecoder")
 
             ax.set_title(f"{band_name} (r={r:.3f})",
                          fontsize=9, fontweight="bold",
@@ -608,15 +608,15 @@ def main():
     # For REVE with a tag or non-default layer, write to a namespaced subfolder.
     run_name = f"{args.encoder}_{args.tag}" if args.tag else args.encoder
     if args.encoder == "sleepfm" and not args.tag:
-        OUT_DIR = ROOT / "results" / "xae"
+        OUT_DIR = ROOT / "results" / "spectral_decoder"
     elif args.layer is not None and args.layer != cfg["target_layer"]:
-        OUT_DIR = ROOT / "results" / "xae" / run_name / f"layer{TARGET_LAYER}"
+        OUT_DIR = ROOT / "results" / "spectral_decoder" / run_name / f"layer{TARGET_LAYER}"
     else:
-        OUT_DIR = ROOT / "results" / "xae" / run_name
+        OUT_DIR = ROOT / "results" / "spectral_decoder" / run_name
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     print("=" * 70)
-    print(f"  XAE Training — Spectral Decoder for EEG Tokens  [{args.encoder}]")
+    print(f"  SpectralDecoder Training — Spectral Decoder for EEG Tokens  [{args.encoder}]")
     print("=" * 70)
     print(f"  encoder={args.encoder}  embed_dim={EMBED}  fs={FS}  "
           f"patch_size={PATCH_SIZE}  target_layer={TARGET_LAYER}")
@@ -645,7 +645,7 @@ def main():
               f"(= {temporal_ext.n_bands} bands × {temporal_ext.patch_size} samples)")
 
     # ── Build trainer ───────────────────────────────────────────────────
-    trainer = XAETrainer(
+    trainer = SpectralDecoderTrainer(
         embed_dim=EMBED,
         fs=FS,
         n_fft=PATCH_SIZE,
@@ -662,14 +662,14 @@ def main():
         device=DEVICE,
     )
 
-    print("\n[XAE Architecture]")
+    print("\n[SpectralDecoder Architecture]")
     print(f"  Input:   {EMBED}-dim token embedding")
     print(f"  Hidden:  {HIDDEN_DIM}  (×{N_BLOCKS} residual blocks)")
     print(f"  Output:  {spectral.target_dim}-dim spectral target")
     if TEMPORAL:
         print(f"           {temporal_ext.target_dim}-dim temporal target "
               f"({temporal_ext.n_bands} bands × {temporal_ext.patch_size} samples)")
-    n_params = sum(p.numel() for p in trainer.xae.parameters())
+    n_params = sum(p.numel() for p in trainer.spectral_decoder.parameters())
     print(f"  Params:  {n_params:,}")
     print(f"  Loss weights:  phase={PHASE_WEIGHT}, recon={RECON_WEIGHT}"
           + (f", temporal={TEMPORAL_WEIGHT} (corr={TEMPORAL_CORR_WEIGHT})"
@@ -678,7 +678,7 @@ def main():
 
     # ── Train ───────────────────────────────────────────────────────────
     print(f"\n{'='*70}")
-    print(f"  Training XAE for up to {EPOCHS} epochs (patience={PATIENCE})")
+    print(f"  Training SpectralDecoder for up to {EPOCHS} epochs (patience={PATIENCE})")
     if TEMPORAL:
         print(f"  Temporal head: ENABLED (6 × {PATCH_SIZE} = {6*PATCH_SIZE} dim waveform output)")
     print(f"{'='*70}\n")
@@ -698,7 +698,7 @@ def main():
     )
 
     # ── Save checkpoint ─────────────────────────────────────────────────
-    ckpt_path = OUT_DIR / "xae_checkpoint.pt"
+    ckpt_path = OUT_DIR / "spectral_decoder_checkpoint.pt"
     trainer.save(str(ckpt_path))
 
     # ── Training curves ─────────────────────────────────────────────────
@@ -736,9 +736,9 @@ def main():
         pool_channels=POOL_CHANNELS,
     )
     emb_norm = (val_embeddings - trainer.embed_mean) / trainer.embed_std
-    trainer.xae.eval()
+    trainer.spectral_decoder.eval()
     with torch.no_grad():
-        pred_norm = trainer.xae.decode(emb_norm)
+        pred_norm = trainer.spectral_decoder.decode(emb_norm)
     pred = pred_norm * trainer.target_std + trainer.target_mean
 
     gt_amp = val_targets[:, :spectral.n_bins]
@@ -769,7 +769,7 @@ def main():
     if TEMPORAL and val_temporal is not None:
         print("\n=== Per-band waveform Pearson r (temporal) ===")
         with torch.no_grad():
-            temp_pred_norm = trainer.xae.decode_temporal(emb_norm)
+            temp_pred_norm = trainer.spectral_decoder.decode_temporal(emb_norm)
         temp_pred = temp_pred_norm * trainer.temporal_std + trainer.temporal_mean
         T = trainer.temporal_extractor.patch_size
         band_names = list(CLINICAL_BANDS.keys())
@@ -800,7 +800,7 @@ def main():
               f"{np.nanmedian(all_corr):>10.4f}")
 
     elapsed = time.time() - t0
-    print(f"\n✅ XAE training complete in {elapsed / 60:.1f} minutes.")
+    print(f"\n✅ SpectralDecoder training complete in {elapsed / 60:.1f} minutes.")
     print(f"   Checkpoint: {ckpt_path}")
     print(f"   Results:    {OUT_DIR}/")
 

@@ -1,6 +1,6 @@
 """Run TCAV (Testing with Concept Activation Vectors) for a named experiment.
 
-Three TCAV variants are computed (see src/sae4eeg/tcav.py for full details):
+Three TCAV variants are computed (see src/mecheeg/tcav.py for full details):
 
   A. Weight-space alignment score  — NOT proper Kim et al.
      Fraction of K fold-CAVs where W_enc[i]·v_C > 0.  Purely weight-space,
@@ -147,8 +147,8 @@ def _collect(
     labels            : (N,) int labels or None if unavailable
     tokens_per_window : S — number of tokens per input window
     """
-    from sae4eeg.encoders import EncoderBackend
-    from sae4eeg.sae import ActivationExtractor
+    from mecheeg.encoders import EncoderBackend
+    from mecheeg.sae import ActivationExtractor
 
     is_backend = isinstance(encoder, EncoderBackend)
     act_list: list[torch.Tensor] = []
@@ -254,7 +254,7 @@ def main() -> None:
     print(f"       encoder={encoder_name}  layer={target_layer}")
 
     # ── 1. Load SAE ──────────────────────────────────────────────────────────
-    from sae4eeg.sae import SparseAutoencoder
+    from mecheeg.sae import SparseAutoencoder
 
     sae_path = ROOT / meta["sae_checkpoint"]
     sae_ckpt = torch.load(str(sae_path), map_location="cpu", weights_only=False)
@@ -286,8 +286,8 @@ def main() -> None:
     print(f"[TCAV] Codebook: {K} clusters")
 
     # ── 3. Encoder + dataset ─────────────────────────────────────────────────
-    from sae4eeg.dataset  import get_dataloaders, StandardizeLabel
-    from sae4eeg.encoders import load_encoder
+    from mecheeg.dataset  import get_dataloaders, StandardizeLabel
+    from mecheeg.encoders import load_encoder
 
     weights_path = meta.get("weights_path") or meta.get("encoder_weights")
     if encoder_name == "sleepfm":
@@ -301,7 +301,7 @@ def main() -> None:
     data_path = meta.get("data_path", _ENCODER_DATA.get(encoder_name, "data/D4-v3-preprocessed-v2"))
     data_root = ROOT / data_path
     if "D4-v4" in str(data_path):
-        from sae4eeg.dataset import V4ResampleTransform
+        from mecheeg.dataset import V4ResampleTransform
         _transform = V4ResampleTransform()
     else:
         _transform = StandardizeLabel()
@@ -350,7 +350,7 @@ def main() -> None:
     print("[TCAV] Band token counts: " + "  ".join(f"{b}={n}" for b, n in counts.items()))
 
     # ── 7. Train CAVs ────────────────────────────────────────────────────────
-    from sae4eeg.tcav import (
+    from mecheeg.tcav import (
         cav_sae_alignment, compute_model_tcav_score, compute_tcav_scores,
         concept_firing_rates, firing_rate_enrichment, get_sae_features,
         train_cav, train_probe,
