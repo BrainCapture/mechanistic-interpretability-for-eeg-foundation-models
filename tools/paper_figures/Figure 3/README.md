@@ -6,10 +6,19 @@
 
 ## Regenerate
 
-**Data bundling: TODO.** The script currently expects `results/experiments/{exp}/taxonomy_cache.pt` (or `app_cache.pt`) for each of ~140 (encoder × layer × expansion) configurations. Combined size is GB-scale, so we need to pre-compute the (separable, entangled, dead) percentages and ship only a small summary `data.npz`.
+```bash
+uv run python "tools/paper_figures/Figure 3/plot.py"
+```
 
-Until then, the script only runs in the development repo where the full result caches are available.
+Self-contained: reads `data.json` (30 KB, 258 experiment entries) next to the script. Visually identical to the submitted version. The md5 may not match byte-for-byte due to matplotlib version-drift in PNG encoding, but the image content and dimensions are the same.
 
-## Data provenance (when bundled)
+## Data provenance
 
-Each cell is a single percentage derived from `feature_meta_enrichment` in the per-experiment `taxonomy_cache.pt`, classified via `_classify(...)` from the development repo's `tools/_archive/plot_taxonomy_expansion.py`. Output shape: 3 encoders × ~7 layers × ~7 expansion factors × 3 classes ≈ 450 numbers — easily a few KB once bundled.
+`data.json` is a `{exp_name: {separable, entangled, dead}}` lookup table. Each entry is the output of `_classify(feature_meta_enrichment, fire_rates_pct=..., expected_rate_pct=...)` applied to the corresponding `taxonomy_cache.pt` (or `app_cache.pt`) in the development repo's `results/experiments/{exp_name}/` directory.
+
+The 258 entries cover:
+- SleepFM: layers {0,1,2} × expansions {1,2,4,8,16,32,64}
+- LaBraM: layers {0..11} × expansions {1,2,4,8,16,32,64}
+- REVE: layers {0..21} × expansions {1,2,4,8,16,32,64}
+
+(LaBraM and REVE at E=32, E=64 for some layers are intentionally missing — no SAE was trained there — and render as hatched cells.)

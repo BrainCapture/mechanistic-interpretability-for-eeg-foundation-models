@@ -1,24 +1,26 @@
 # Figure 6 — Spectrum-level concept steering (abnormal → normal)
 
-> SleepFM layer 2, E=8. Baseline abnormal source vs. normal target centroid (left), and decoded spectrum after clamping the top n=104 and n=164 TCAV-aligned features to the target centroid (centre, right). Shading = 95% bootstrap CIs on the target mean.
+> SleepFM layer 2, E=8. Shading denotes 95% bootstrap CIs on the target mean.
+> **Left:** Baseline abnormal source vs. normal target centroid.
+> **Centre & Right:** Decoded spectrum after clamping the top n=104 and n=164 TCAV-aligned features to the target centroid.
 
 ![figure](figure.png)
 
 ## Regenerate
 
-**Data bundling: TODO.** The script currently expects:
-
-- `results/experiments/sleepfm_finetuned_layer2/metadata.json`
-- `results/experiments/sleepfm_finetuned_layer2/app_cache.pt` (~100s of MB)
-- the SAE checkpoint referenced in metadata (`results/features/sleepfm_finetuned/sae_*.pt`)
-- `results/steering_cache/sleepfm_finetuned_layer2/steering_cache.pt` (~GB-scale)
-
-Self-contained version is pending: we need to pre-compute the post-clamp decoded spectra (and source/target centroids) once and ship only those as a small `data.npz`. Until then the script runs only in the development repo.
-
-## Current invocation (in dev repo)
-
 ```bash
-uv run python tools/paper_figures/Figure\ 6/plot.py \
-  --experiment sleepfm_finetuned_layer2 \
-  --n-clamp 104 164
+uv run python "tools/paper_figures/Figure 6/plot.py"
 ```
+
+Self-contained: reads `data.npz` (7 KB) next to the script. Produces `figure.png` and `figure.pdf` byte-identical to the submitted version.
+
+## Data provenance
+
+`data.npz` bundles the pre-decoded spectra for:
+
+- Source mean: SleepFM L2 abnormal-EEG token embeddings decoded through SAE + XAE
+- Target mean ± 95% subject-bootstrap CI: normal-EEG token embeddings decoded the same way (across 579 subjects)
+- Two steered spectra (n=104 and n=164 top TCAV-ranked features clamped to the target centroid)
+- Metric values M1 (spectral-distance reduction) and M2 (probe-recovery score)
+
+Extraction was done from the development repo using `tools/_archive` data: `results/experiments/sleepfm_finetuned_exp8_k64_layer2/{metadata.json, app_cache.pt}`, the SAE checkpoint, the XAE checkpoint (66 MB in `gs://sae4eeg-app-assets/results/xae/sleepfm_finetuned/xae_checkpoint.pt`), and `results/steering_cache/sleepfm_finetuned_exp8_k64_layer2/steering_cache.pt`. The result is a 7 KB npz that fully specifies the figure.

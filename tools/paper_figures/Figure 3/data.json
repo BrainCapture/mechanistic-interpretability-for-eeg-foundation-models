@@ -1,0 +1,1292 @@
+{
+  "sleepfm_finetuned_layer0": {
+    "separable": 0.3515625,
+    "entangled": 0.6015625,
+    "dead": 0.046875
+  },
+  "sleepfm_finetuned_exp2_layer0": {
+    "separable": 0.23828125,
+    "entangled": 0.6953125,
+    "dead": 0.06640625
+  },
+  "sleepfm_finetuned_exp4_layer0": {
+    "separable": 0.294921875,
+    "entangled": 0.62890625,
+    "dead": 0.076171875
+  },
+  "sleepfm_finetuned_exp8_layer0": {
+    "separable": 0.4453125,
+    "entangled": 0.458984375,
+    "dead": 0.095703125
+  },
+  "sleepfm_finetuned_exp16_layer0": {
+    "separable": 0.44873046875,
+    "entangled": 0.44921875,
+    "dead": 0.10205078125
+  },
+  "sleepfm_finetuned_exp32_layer0": {
+    "separable": 0.4794921875,
+    "entangled": 0.35498046875,
+    "dead": 0.16552734375
+  },
+  "sleepfm_finetuned_exp64_layer0": {
+    "separable": 0.4713134765625,
+    "entangled": 0.2083740234375,
+    "dead": 0.3203125
+  },
+  "sleepfm_finetuned_layer1": {
+    "separable": 0.1875,
+    "entangled": 0.765625,
+    "dead": 0.046875
+  },
+  "sleepfm_finetuned_exp2_layer1": {
+    "separable": 0.2734375,
+    "entangled": 0.69921875,
+    "dead": 0.02734375
+  },
+  "sleepfm_finetuned_exp4_layer1": {
+    "separable": 0.3046875,
+    "entangled": 0.658203125,
+    "dead": 0.037109375
+  },
+  "sleepfm_finetuned_exp8_layer1": {
+    "separable": 0.4365234375,
+    "entangled": 0.4873046875,
+    "dead": 0.076171875
+  },
+  "sleepfm_finetuned_exp16_layer1": {
+    "separable": 0.45703125,
+    "entangled": 0.42919921875,
+    "dead": 0.11376953125
+  },
+  "sleepfm_finetuned_exp32_layer1": {
+    "separable": 0.5126953125,
+    "entangled": 0.291015625,
+    "dead": 0.1962890625
+  },
+  "sleepfm_finetuned_exp64_layer1": {
+    "separable": 0.4744873046875,
+    "entangled": 0.176025390625,
+    "dead": 0.3494873046875
+  },
+  "sleepfm_finetuned_exp2_layer2": {
+    "separable": 0.22265625,
+    "entangled": 0.71875,
+    "dead": 0.05859375
+  },
+  "sleepfm_finetuned_exp4_layer2": {
+    "separable": 0.271484375,
+    "entangled": 0.673828125,
+    "dead": 0.0546875
+  },
+  "sleepfm_finetuned_exp8_layer2": {
+    "separable": 0.3837890625,
+    "entangled": 0.517578125,
+    "dead": 0.0986328125
+  },
+  "sleepfm_finetuned_exp16_layer2": {
+    "separable": 0.47509765625,
+    "entangled": 0.392578125,
+    "dead": 0.13232421875
+  },
+  "sleepfm_finetuned_exp32_layer2": {
+    "separable": 0.489990234375,
+    "entangled": 0.245361328125,
+    "dead": 0.2646484375
+  },
+  "sleepfm_finetuned_exp64_layer2": {
+    "separable": 0.4151611328125,
+    "entangled": 0.15087890625,
+    "dead": 0.4339599609375
+  },
+  "labram_layer0": {
+    "separable": 0.325,
+    "entangled": 0.67,
+    "dead": 0.005
+  },
+  "labram_layer0_exp2": {
+    "separable": 0.275,
+    "entangled": 0.695,
+    "dead": 0.03
+  },
+  "labram_layer0_exp4": {
+    "separable": 0.28125,
+    "entangled": 0.6325,
+    "dead": 0.08625
+  },
+  "labram_layer0_exp8": {
+    "separable": 0.45,
+    "entangled": 0.40125,
+    "dead": 0.14875
+  },
+  "labram_layer0_exp16": {
+    "separable": 0.49375,
+    "entangled": 0.2453125,
+    "dead": 0.2609375
+  },
+  "labram_layer0_exp32": {
+    "separable": 0.45578125,
+    "entangled": 0.145625,
+    "dead": 0.39859374999999997
+  },
+  "labram_layer0_exp64": {
+    "separable": 0.357421875,
+    "entangled": 0.07859375,
+    "dead": 0.563984375
+  },
+  "labram_layer1": {
+    "separable": 0.27,
+    "entangled": 0.7,
+    "dead": 0.03
+  },
+  "labram_layer1_exp2": {
+    "separable": 0.3375,
+    "entangled": 0.6125,
+    "dead": 0.05
+  },
+  "labram_layer1_exp4": {
+    "separable": 0.3975,
+    "entangled": 0.46375,
+    "dead": 0.13875
+  },
+  "labram_layer1_exp8": {
+    "separable": 0.49,
+    "entangled": 0.281875,
+    "dead": 0.228125
+  },
+  "labram_layer1_exp16": {
+    "separable": 0.45875,
+    "entangled": 0.2146875,
+    "dead": 0.3265625
+  },
+  "labram_layer1_exp32": {
+    "separable": 0.44,
+    "entangled": 0.12046875,
+    "dead": 0.43953125000000004
+  },
+  "labram_layer1_exp64": {
+    "separable": 0.32796875,
+    "entangled": 0.063125,
+    "dead": 0.60890625
+  },
+  "labram_layer2": {
+    "separable": 0.265,
+    "entangled": 0.725,
+    "dead": 0.01
+  },
+  "labram_layer2_exp2": {
+    "separable": 0.265,
+    "entangled": 0.7,
+    "dead": 0.035
+  },
+  "labram_layer2_exp4": {
+    "separable": 0.3125,
+    "entangled": 0.6125,
+    "dead": 0.075
+  },
+  "labram_layer2_exp8": {
+    "separable": 0.408125,
+    "entangled": 0.43625,
+    "dead": 0.155625
+  },
+  "labram_layer2_exp16": {
+    "separable": 0.439375,
+    "entangled": 0.3178125,
+    "dead": 0.2428125
+  },
+  "labram_layer2_exp32": {
+    "separable": 0.41984375,
+    "entangled": 0.181875,
+    "dead": 0.39828125000000003
+  },
+  "labram_layer2_exp64": {
+    "separable": 0.35296875,
+    "entangled": 0.09609375,
+    "dead": 0.5509375
+  },
+  "labram_layer3": {
+    "separable": 0.255,
+    "entangled": 0.73,
+    "dead": 0.015
+  },
+  "labram_layer3_exp2": {
+    "separable": 0.25,
+    "entangled": 0.72,
+    "dead": 0.030000000000000002
+  },
+  "labram_layer3_exp4": {
+    "separable": 0.3,
+    "entangled": 0.6425,
+    "dead": 0.0575
+  },
+  "labram_layer3_exp8": {
+    "separable": 0.39875,
+    "entangled": 0.4775,
+    "dead": 0.12375
+  },
+  "labram_layer3_exp16": {
+    "separable": 0.4046875,
+    "entangled": 0.3940625,
+    "dead": 0.20124999999999998
+  },
+  "labram_layer3_exp32": {
+    "separable": 0.42203125,
+    "entangled": 0.24765625,
+    "dead": 0.3303125
+  },
+  "labram_layer3_exp64": {
+    "separable": 0.390078125,
+    "entangled": 0.1334375,
+    "dead": 0.47648437499999996
+  },
+  "labram_layer4": {
+    "separable": 0.265,
+    "entangled": 0.71,
+    "dead": 0.025
+  },
+  "labram_layer4_exp2": {
+    "separable": 0.255,
+    "entangled": 0.71,
+    "dead": 0.035
+  },
+  "labram_layer4_exp4": {
+    "separable": 0.3275,
+    "entangled": 0.59875,
+    "dead": 0.07375
+  },
+  "labram_layer4_exp8": {
+    "separable": 0.3575,
+    "entangled": 0.51875,
+    "dead": 0.12375
+  },
+  "labram_layer4_exp16": {
+    "separable": 0.3815625,
+    "entangled": 0.42875,
+    "dead": 0.1896875
+  },
+  "labram_layer4_exp32": {
+    "separable": 0.42359375,
+    "entangled": 0.29546875,
+    "dead": 0.2809375
+  },
+  "labram_layer4_exp64": {
+    "separable": 0.4053125,
+    "entangled": 0.1828125,
+    "dead": 0.411875
+  },
+  "labram_layer5": {
+    "separable": 0.25,
+    "entangled": 0.72,
+    "dead": 0.03
+  },
+  "labram_layer5_exp2": {
+    "separable": 0.2225,
+    "entangled": 0.7425,
+    "dead": 0.035
+  },
+  "labram_layer5_exp4": {
+    "separable": 0.3,
+    "entangled": 0.62875,
+    "dead": 0.07125000000000001
+  },
+  "labram_layer5_exp8": {
+    "separable": 0.336875,
+    "entangled": 0.56375,
+    "dead": 0.09937499999999999
+  },
+  "labram_layer5_exp16": {
+    "separable": 0.3646875,
+    "entangled": 0.4834375,
+    "dead": 0.15187499999999998
+  },
+  "labram_layer5_exp32": {
+    "separable": 0.410625,
+    "entangled": 0.34671875,
+    "dead": 0.24265625
+  },
+  "labram_layer5_exp64": {
+    "separable": 0.401640625,
+    "entangled": 0.225546875,
+    "dead": 0.3728125
+  },
+  "labram_layer6": {
+    "separable": 0.225,
+    "entangled": 0.75,
+    "dead": 0.025
+  },
+  "labram_layer6_exp2": {
+    "separable": 0.2375,
+    "entangled": 0.705,
+    "dead": 0.0575
+  },
+  "labram_layer6_exp4": {
+    "separable": 0.30125,
+    "entangled": 0.63125,
+    "dead": 0.0675
+  },
+  "labram_layer6_exp8": {
+    "separable": 0.2775,
+    "entangled": 0.66,
+    "dead": 0.0625
+  },
+  "labram_layer6_exp16": {
+    "separable": 0.3440625,
+    "entangled": 0.5215625,
+    "dead": 0.134375
+  },
+  "labram_layer6_exp32": {
+    "separable": 0.4125,
+    "entangled": 0.3771875,
+    "dead": 0.2103125
+  },
+  "labram_layer6_exp64": {
+    "separable": 0.413046875,
+    "entangled": 0.25203125,
+    "dead": 0.334921875
+  },
+  "labram_layer7": {
+    "separable": 0.16,
+    "entangled": 0.81,
+    "dead": 0.03
+  },
+  "labram_layer7_exp2": {
+    "separable": 0.2075,
+    "entangled": 0.7375,
+    "dead": 0.05500000000000001
+  },
+  "labram_layer7_exp4": {
+    "separable": 0.27625,
+    "entangled": 0.63,
+    "dead": 0.09375
+  },
+  "labram_layer7_exp8": {
+    "separable": 0.291875,
+    "entangled": 0.623125,
+    "dead": 0.08499999999999999
+  },
+  "labram_layer7_exp16": {
+    "separable": 0.3615625,
+    "entangled": 0.4896875,
+    "dead": 0.14875
+  },
+  "labram_layer7_exp32": {
+    "separable": 0.395625,
+    "entangled": 0.37390625,
+    "dead": 0.23046875
+  },
+  "labram_layer7_exp64": {
+    "separable": 0.41859375,
+    "entangled": 0.248125,
+    "dead": 0.33328125
+  },
+  "labram_layer8": {
+    "separable": 0.21,
+    "entangled": 0.74,
+    "dead": 0.05
+  },
+  "labram_layer8_exp2": {
+    "separable": 0.1975,
+    "entangled": 0.75,
+    "dead": 0.052500000000000005
+  },
+  "labram_layer8_exp4": {
+    "separable": 0.24,
+    "entangled": 0.69625,
+    "dead": 0.06375
+  },
+  "labram_layer8_exp8": {
+    "separable": 0.330625,
+    "entangled": 0.56125,
+    "dead": 0.108125
+  },
+  "labram_layer8_exp16": {
+    "separable": 0.3665625,
+    "entangled": 0.47625,
+    "dead": 0.1571875
+  },
+  "labram_layer8_exp32": {
+    "separable": 0.403125,
+    "entangled": 0.36515625,
+    "dead": 0.23171875
+  },
+  "labram_layer8_exp64": {
+    "separable": 0.409765625,
+    "entangled": 0.241484375,
+    "dead": 0.34875
+  },
+  "labram_layer9": {
+    "separable": 0.28,
+    "entangled": 0.65,
+    "dead": 0.07
+  },
+  "labram_layer9_exp2": {
+    "separable": 0.3325,
+    "entangled": 0.565,
+    "dead": 0.1025
+  },
+  "labram_layer9_exp4": {
+    "separable": 0.20375,
+    "entangled": 0.72875,
+    "dead": 0.0675
+  },
+  "labram_layer9_exp8": {
+    "separable": 0.27875,
+    "entangled": 0.634375,
+    "dead": 0.08687500000000001
+  },
+  "labram_layer9_exp16": {
+    "separable": 0.3559375,
+    "entangled": 0.5021875,
+    "dead": 0.141875
+  },
+  "labram_layer9_exp32": {
+    "separable": 0.394375,
+    "entangled": 0.37109375,
+    "dead": 0.23453125
+  },
+  "labram_layer9_exp64": {
+    "separable": 0.40046875,
+    "entangled": 0.236484375,
+    "dead": 0.363046875
+  },
+  "labram_layer10": {
+    "separable": 0.2,
+    "entangled": 0.735,
+    "dead": 0.065
+  },
+  "labram_layer10_exp2": {
+    "separable": 0.3375,
+    "entangled": 0.545,
+    "dead": 0.1175
+  },
+  "labram_layer10_exp4": {
+    "separable": 0.28875,
+    "entangled": 0.59375,
+    "dead": 0.1175
+  },
+  "labram_layer10_exp8": {
+    "separable": 0.306875,
+    "entangled": 0.565,
+    "dead": 0.128125
+  },
+  "labram_layer10_exp16": {
+    "separable": 0.385,
+    "entangled": 0.425,
+    "dead": 0.19
+  },
+  "labram_layer10_exp32": {
+    "separable": 0.415625,
+    "entangled": 0.31234375,
+    "dead": 0.27203125
+  },
+  "labram_layer10_exp64": {
+    "separable": 0.43515625,
+    "entangled": 0.191953125,
+    "dead": 0.37289062500000003
+  },
+  "labram_layer11": {
+    "separable": 0.3,
+    "entangled": 0.355,
+    "dead": 0.34500000000000003
+  },
+  "labram_layer11_exp2": {
+    "separable": 0.26,
+    "entangled": 0.24,
+    "dead": 0.5
+  },
+  "labram_layer11_exp4": {
+    "separable": 0.23,
+    "entangled": 0.15625,
+    "dead": 0.61375
+  },
+  "labram_layer11_exp8": {
+    "separable": 0.1125,
+    "entangled": 0.04875,
+    "dead": 0.83875
+  },
+  "labram_layer11_exp16": {
+    "separable": 0.0740625,
+    "entangled": 0.03,
+    "dead": 0.8959374999999999
+  },
+  "labram_layer11_exp32": {
+    "separable": 0.05515625,
+    "entangled": 0.0165625,
+    "dead": 0.9282812500000001
+  },
+  "labram_layer11_exp64": {
+    "separable": 0.02515625,
+    "entangled": 0.00640625,
+    "dead": 0.9684375
+  },
+  "reve_qjbe08_layer0": {
+    "separable": 0.109375,
+    "entangled": 0.859375,
+    "dead": 0.03125
+  },
+  "reve_qjbe08_exp2_layer0": {
+    "separable": 0.197265625,
+    "entangled": 0.759765625,
+    "dead": 0.04296875
+  },
+  "reve_qjbe08_exp4_layer0": {
+    "separable": 0.2763671875,
+    "entangled": 0.66845703125,
+    "dead": 0.05517578125
+  },
+  "reve_qjbe08_exp8_layer0": {
+    "separable": 0.37939453125,
+    "entangled": 0.488525390625,
+    "dead": 0.132080078125
+  },
+  "reve_qjbe08_exp16_layer0": {
+    "separable": 0.412109375,
+    "entangled": 0.357421875,
+    "dead": 0.23046875
+  },
+  "reve_qjbe08_exp32_layer0": {
+    "separable": 0.38262939453125,
+    "entangled": 0.21636962890625,
+    "dead": 0.4010009765625
+  },
+  "reve_qjbe08_exp64_layer0": {
+    "separable": 0.2926025390625,
+    "entangled": 0.113189697265625,
+    "dead": 0.594207763671875
+  },
+  "reve_qjbe08_layer1": {
+    "separable": 0.1875,
+    "entangled": 0.634765625,
+    "dead": 0.177734375
+  },
+  "reve_qjbe08_exp2_layer1": {
+    "separable": 0.22265625,
+    "entangled": 0.4453125,
+    "dead": 0.33203125
+  },
+  "reve_qjbe08_exp4_layer1": {
+    "separable": 0.21923828125,
+    "entangled": 0.32373046875,
+    "dead": 0.45703125
+  },
+  "reve_qjbe08_exp8_layer1": {
+    "separable": 0.20751953125,
+    "entangled": 0.165283203125,
+    "dead": 0.627197265625
+  },
+  "reve_qjbe08_exp16_layer1": {
+    "separable": 0.1717529296875,
+    "entangled": 0.101806640625,
+    "dead": 0.7264404296875
+  },
+  "reve_qjbe08_exp32_layer1": {
+    "separable": 0.1119384765625,
+    "entangled": 0.0555419921875,
+    "dead": 0.83251953125
+  },
+  "reve_qjbe08_exp64_layer1": {
+    "separable": 0.067291259765625,
+    "entangled": 0.029876708984375,
+    "dead": 0.90283203125
+  },
+  "reve_qjbe08_layer2": {
+    "separable": 0.18359375,
+    "entangled": 0.73828125,
+    "dead": 0.078125
+  },
+  "reve_qjbe08_exp2_layer2": {
+    "separable": 0.2822265625,
+    "entangled": 0.6220703125,
+    "dead": 0.095703125
+  },
+  "reve_qjbe08_exp4_layer2": {
+    "separable": 0.3056640625,
+    "entangled": 0.48681640625,
+    "dead": 0.20751953125
+  },
+  "reve_qjbe08_exp8_layer2": {
+    "separable": 0.354736328125,
+    "entangled": 0.3271484375,
+    "dead": 0.318115234375
+  },
+  "reve_qjbe08_exp16_layer2": {
+    "separable": 0.3304443359375,
+    "entangled": 0.1875,
+    "dead": 0.4820556640625
+  },
+  "reve_qjbe08_exp32_layer2": {
+    "separable": 0.26824951171875,
+    "entangled": 0.10443115234375,
+    "dead": 0.6273193359375
+  },
+  "reve_qjbe08_exp64_layer2": {
+    "separable": 0.154632568359375,
+    "entangled": 0.045166015625,
+    "dead": 0.800201416015625
+  },
+  "reve_qjbe08_layer3": {
+    "separable": 0.224609375,
+    "entangled": 0.73828125,
+    "dead": 0.037109375
+  },
+  "reve_qjbe08_exp2_layer3": {
+    "separable": 0.2431640625,
+    "entangled": 0.693359375,
+    "dead": 0.0634765625
+  },
+  "reve_qjbe08_exp4_layer3": {
+    "separable": 0.34619140625,
+    "entangled": 0.53369140625,
+    "dead": 0.1201171875
+  },
+  "reve_qjbe08_exp8_layer3": {
+    "separable": 0.419189453125,
+    "entangled": 0.413330078125,
+    "dead": 0.16748046875
+  },
+  "reve_qjbe08_exp16_layer3": {
+    "separable": 0.4493408203125,
+    "entangled": 0.2728271484375,
+    "dead": 0.27783203125
+  },
+  "reve_qjbe08_exp32_layer3": {
+    "separable": 0.4267578125,
+    "entangled": 0.14739990234375,
+    "dead": 0.42584228515625
+  },
+  "reve_qjbe08_exp64_layer3": {
+    "separable": 0.35638427734375,
+    "entangled": 0.091644287109375,
+    "dead": 0.551971435546875
+  },
+  "reve_qjbe08_layer4": {
+    "separable": 0.330078125,
+    "entangled": 0.623046875,
+    "dead": 0.046875
+  },
+  "reve_qjbe08_exp2_layer4": {
+    "separable": 0.306640625,
+    "entangled": 0.634765625,
+    "dead": 0.05859375
+  },
+  "reve_qjbe08_exp4_layer4": {
+    "separable": 0.40234375,
+    "entangled": 0.49755859375,
+    "dead": 0.10009765625
+  },
+  "reve_qjbe08_exp8_layer4": {
+    "separable": 0.449951171875,
+    "entangled": 0.360595703125,
+    "dead": 0.189453125
+  },
+  "reve_qjbe08_exp16_layer4": {
+    "separable": 0.466796875,
+    "entangled": 0.2176513671875,
+    "dead": 0.3155517578125
+  },
+  "reve_qjbe08_exp32_layer4": {
+    "separable": 0.38641357421875,
+    "entangled": 0.1278076171875,
+    "dead": 0.48577880859375
+  },
+  "reve_qjbe08_exp64_layer4": {
+    "separable": 0.2738037109375,
+    "entangled": 0.059234619140625,
+    "dead": 0.666961669921875
+  },
+  "reve_qjbe08_layer5": {
+    "separable": 0.33984375,
+    "entangled": 0.62890625,
+    "dead": 0.03125
+  },
+  "reve_qjbe08_exp2_layer5": {
+    "separable": 0.33203125,
+    "entangled": 0.603515625,
+    "dead": 0.064453125
+  },
+  "reve_qjbe08_exp4_layer5": {
+    "separable": 0.4072265625,
+    "entangled": 0.5234375,
+    "dead": 0.0693359375
+  },
+  "reve_qjbe08_exp8_layer5": {
+    "separable": 0.4658203125,
+    "entangled": 0.39990234375,
+    "dead": 0.13427734375
+  },
+  "reve_qjbe08_exp16_layer5": {
+    "separable": 0.510498046875,
+    "entangled": 0.2586669921875,
+    "dead": 0.2308349609375
+  },
+  "reve_qjbe08_exp32_layer5": {
+    "separable": 0.47723388671875,
+    "entangled": 0.1622314453125,
+    "dead": 0.36053466796875
+  },
+  "reve_qjbe08_exp64_layer5": {
+    "separable": 0.38201904296875,
+    "entangled": 0.09637451171875,
+    "dead": 0.5216064453125
+  },
+  "reve_qjbe08_layer6": {
+    "separable": 0.345703125,
+    "entangled": 0.572265625,
+    "dead": 0.08203125
+  },
+  "reve_qjbe08_exp2_layer6": {
+    "separable": 0.3759765625,
+    "entangled": 0.56640625,
+    "dead": 0.0576171875
+  },
+  "reve_qjbe08_exp4_layer6": {
+    "separable": 0.45361328125,
+    "entangled": 0.4462890625,
+    "dead": 0.10009765625
+  },
+  "reve_qjbe08_exp8_layer6": {
+    "separable": 0.512451171875,
+    "entangled": 0.3525390625,
+    "dead": 0.135009765625
+  },
+  "reve_qjbe08_exp16_layer6": {
+    "separable": 0.5228271484375,
+    "entangled": 0.2410888671875,
+    "dead": 0.236083984375
+  },
+  "reve_qjbe08_exp32_layer6": {
+    "separable": 0.470947265625,
+    "entangled": 0.14227294921875,
+    "dead": 0.38677978515625
+  },
+  "reve_qjbe08_exp64_layer6": {
+    "separable": 0.367340087890625,
+    "entangled": 0.079010009765625,
+    "dead": 0.55364990234375
+  },
+  "reve_qjbe08_layer7": {
+    "separable": 0.2734375,
+    "entangled": 0.681640625,
+    "dead": 0.044921875
+  },
+  "reve_qjbe08_exp2_layer7": {
+    "separable": 0.37109375,
+    "entangled": 0.5703125,
+    "dead": 0.05859375
+  },
+  "reve_qjbe08_exp4_layer7": {
+    "separable": 0.3984375,
+    "entangled": 0.53515625,
+    "dead": 0.06640625
+  },
+  "reve_qjbe08_exp8_layer7": {
+    "separable": 0.494140625,
+    "entangled": 0.371337890625,
+    "dead": 0.134521484375
+  },
+  "reve_qjbe08_exp16_layer7": {
+    "separable": 0.51416015625,
+    "entangled": 0.2613525390625,
+    "dead": 0.2244873046875
+  },
+  "reve_qjbe08_exp32_layer7": {
+    "separable": 0.48101806640625,
+    "entangled": 0.162109375,
+    "dead": 0.35687255859375
+  },
+  "reve_qjbe08_exp64_layer7": {
+    "separable": 0.386749267578125,
+    "entangled": 0.095062255859375,
+    "dead": 0.5181884765625
+  },
+  "reve_qjbe08_layer8": {
+    "separable": 0.32421875,
+    "entangled": 0.642578125,
+    "dead": 0.033203125
+  },
+  "reve_qjbe08_exp2_layer8": {
+    "separable": 0.357421875,
+    "entangled": 0.5888671875,
+    "dead": 0.0537109375
+  },
+  "reve_qjbe08_exp4_layer8": {
+    "separable": 0.275390625,
+    "entangled": 0.69921875,
+    "dead": 0.025390625
+  },
+  "reve_qjbe08_exp8_layer8": {
+    "separable": 0.5029296875,
+    "entangled": 0.364501953125,
+    "dead": 0.132568359375
+  },
+  "reve_qjbe08_exp16_layer8": {
+    "separable": 0.5179443359375,
+    "entangled": 0.2318115234375,
+    "dead": 0.250244140625
+  },
+  "reve_qjbe08_exp32_layer8": {
+    "separable": 0.46319580078125,
+    "entangled": 0.14532470703125,
+    "dead": 0.3914794921875
+  },
+  "reve_qjbe08_exp64_layer8": {
+    "separable": 0.353179931640625,
+    "entangled": 0.084564208984375,
+    "dead": 0.562255859375
+  },
+  "reve_qjbe08_layer9": {
+    "separable": 0.296875,
+    "entangled": 0.658203125,
+    "dead": 0.044921875
+  },
+  "reve_qjbe08_exp2_layer9": {
+    "separable": 0.3349609375,
+    "entangled": 0.60546875,
+    "dead": 0.0595703125
+  },
+  "reve_qjbe08_exp4_layer9": {
+    "separable": 0.42822265625,
+    "entangled": 0.4912109375,
+    "dead": 0.08056640625
+  },
+  "reve_qjbe08_exp8_layer9": {
+    "separable": 0.49365234375,
+    "entangled": 0.35791015625,
+    "dead": 0.1484375
+  },
+  "reve_qjbe08_exp16_layer9": {
+    "separable": 0.5015869140625,
+    "entangled": 0.227294921875,
+    "dead": 0.2711181640625
+  },
+  "reve_qjbe08_exp32_layer9": {
+    "separable": 0.4517822265625,
+    "entangled": 0.126220703125,
+    "dead": 0.4219970703125
+  },
+  "reve_qjbe08_exp64_layer9": {
+    "separable": 0.346435546875,
+    "entangled": 0.072540283203125,
+    "dead": 0.581024169921875
+  },
+  "reve_qjbe08_layer10": {
+    "separable": 0.361328125,
+    "entangled": 0.603515625,
+    "dead": 0.03515625
+  },
+  "reve_qjbe08_exp2_layer10": {
+    "separable": 0.3916015625,
+    "entangled": 0.5712890625,
+    "dead": 0.037109375
+  },
+  "reve_qjbe08_exp4_layer10": {
+    "separable": 0.43115234375,
+    "entangled": 0.48388671875,
+    "dead": 0.0849609375
+  },
+  "reve_qjbe08_exp8_layer10": {
+    "separable": 0.51416015625,
+    "entangled": 0.3544921875,
+    "dead": 0.13134765625
+  },
+  "reve_qjbe08_exp16_layer10": {
+    "separable": 0.5128173828125,
+    "entangled": 0.2452392578125,
+    "dead": 0.241943359375
+  },
+  "reve_qjbe08_exp32_layer10": {
+    "separable": 0.482666015625,
+    "entangled": 0.14581298828125,
+    "dead": 0.37152099609375
+  },
+  "reve_qjbe08_exp64_layer10": {
+    "separable": 0.379791259765625,
+    "entangled": 0.083465576171875,
+    "dead": 0.5367431640625
+  },
+  "reve_qjbe08_layer11": {
+    "separable": 0.236328125,
+    "entangled": 0.73046875,
+    "dead": 0.033203125
+  },
+  "reve_qjbe08_exp2_layer11": {
+    "separable": 0.2509765625,
+    "entangled": 0.7099609375,
+    "dead": 0.0390625
+  },
+  "reve_qjbe08_exp4_layer11": {
+    "separable": 0.33740234375,
+    "entangled": 0.59228515625,
+    "dead": 0.0703125
+  },
+  "reve_qjbe08_exp8_layer11": {
+    "separable": 0.43017578125,
+    "entangled": 0.434326171875,
+    "dead": 0.135498046875
+  },
+  "reve_qjbe08_exp16_layer11": {
+    "separable": 0.46728515625,
+    "entangled": 0.2532958984375,
+    "dead": 0.2794189453125
+  },
+  "reve_qjbe08_exp32_layer11": {
+    "separable": 0.414306640625,
+    "entangled": 0.13665771484375,
+    "dead": 0.44903564453125
+  },
+  "reve_qjbe08_exp64_layer11": {
+    "separable": 0.327178955078125,
+    "entangled": 0.082000732421875,
+    "dead": 0.5908203125
+  },
+  "reve_qjbe08_layer12": {
+    "separable": 0.28515625,
+    "entangled": 0.693359375,
+    "dead": 0.021484375
+  },
+  "reve_qjbe08_exp2_layer12": {
+    "separable": 0.294921875,
+    "entangled": 0.6630859375,
+    "dead": 0.0419921875
+  },
+  "reve_qjbe08_exp4_layer12": {
+    "separable": 0.36083984375,
+    "entangled": 0.5712890625,
+    "dead": 0.06787109375
+  },
+  "reve_qjbe08_exp8_layer12": {
+    "separable": 0.414306640625,
+    "entangled": 0.4462890625,
+    "dead": 0.139404296875
+  },
+  "reve_qjbe08_exp16_layer12": {
+    "separable": 0.4837646484375,
+    "entangled": 0.261962890625,
+    "dead": 0.2542724609375
+  },
+  "reve_qjbe08_exp32_layer12": {
+    "separable": 0.42095947265625,
+    "entangled": 0.15509033203125,
+    "dead": 0.4239501953125
+  },
+  "reve_qjbe08_exp64_layer12": {
+    "separable": 0.3466796875,
+    "entangled": 0.09295654296875,
+    "dead": 0.56036376953125
+  },
+  "reve_qjbe08_layer13": {
+    "separable": 0.271484375,
+    "entangled": 0.689453125,
+    "dead": 0.0390625
+  },
+  "reve_qjbe08_exp2_layer13": {
+    "separable": 0.34375,
+    "entangled": 0.6015625,
+    "dead": 0.0546875
+  },
+  "reve_qjbe08_exp4_layer13": {
+    "separable": 0.3896484375,
+    "entangled": 0.525390625,
+    "dead": 0.0849609375
+  },
+  "reve_qjbe08_exp8_layer13": {
+    "separable": 0.470703125,
+    "entangled": 0.401123046875,
+    "dead": 0.128173828125
+  },
+  "reve_qjbe08_exp16_layer13": {
+    "separable": 0.5194091796875,
+    "entangled": 0.26611328125,
+    "dead": 0.2144775390625
+  },
+  "reve_qjbe08_exp32_layer13": {
+    "separable": 0.485107421875,
+    "entangled": 0.15216064453125,
+    "dead": 0.36273193359375
+  },
+  "reve_qjbe08_exp64_layer13": {
+    "separable": 0.38421630859375,
+    "entangled": 0.091461181640625,
+    "dead": 0.524322509765625
+  },
+  "reve_qjbe08_layer14": {
+    "separable": 0.3046875,
+    "entangled": 0.646484375,
+    "dead": 0.048828125
+  },
+  "reve_qjbe08_exp2_layer14": {
+    "separable": 0.4013671875,
+    "entangled": 0.537109375,
+    "dead": 0.0615234375
+  },
+  "reve_qjbe08_exp4_layer14": {
+    "separable": 0.419921875,
+    "entangled": 0.482421875,
+    "dead": 0.09765625
+  },
+  "reve_qjbe08_exp8_layer14": {
+    "separable": 0.501220703125,
+    "entangled": 0.340087890625,
+    "dead": 0.15869140625
+  },
+  "reve_qjbe08_exp16_layer14": {
+    "separable": 0.4974365234375,
+    "entangled": 0.2392578125,
+    "dead": 0.2633056640625
+  },
+  "reve_qjbe08_exp32_layer14": {
+    "separable": 0.47406005859375,
+    "entangled": 0.135009765625,
+    "dead": 0.39093017578125
+  },
+  "reve_qjbe08_exp64_layer14": {
+    "separable": 0.36383056640625,
+    "entangled": 0.081390380859375,
+    "dead": 0.554779052734375
+  },
+  "reve_qjbe08_layer15": {
+    "separable": 0.28125,
+    "entangled": 0.6484375,
+    "dead": 0.0703125
+  },
+  "reve_qjbe08_exp2_layer15": {
+    "separable": 0.3544921875,
+    "entangled": 0.58203125,
+    "dead": 0.0634765625
+  },
+  "reve_qjbe08_exp4_layer15": {
+    "separable": 0.404296875,
+    "entangled": 0.4892578125,
+    "dead": 0.1064453125
+  },
+  "reve_qjbe08_exp8_layer15": {
+    "separable": 0.482177734375,
+    "entangled": 0.37744140625,
+    "dead": 0.140380859375
+  },
+  "reve_qjbe08_exp16_layer15": {
+    "separable": 0.496337890625,
+    "entangled": 0.265625,
+    "dead": 0.238037109375
+  },
+  "reve_qjbe08_exp32_layer15": {
+    "separable": 0.47705078125,
+    "entangled": 0.1708984375,
+    "dead": 0.35205078125
+  },
+  "reve_qjbe08_exp64_layer15": {
+    "separable": 0.394287109375,
+    "entangled": 0.0950927734375,
+    "dead": 0.5106201171875
+  },
+  "reve_qjbe08_layer16": {
+    "separable": 0.25390625,
+    "entangled": 0.71484375,
+    "dead": 0.03125
+  },
+  "reve_qjbe08_exp2_layer16": {
+    "separable": 0.228515625,
+    "entangled": 0.7431640625,
+    "dead": 0.0283203125
+  },
+  "reve_qjbe08_exp4_layer16": {
+    "separable": 0.32666015625,
+    "entangled": 0.6162109375,
+    "dead": 0.05712890625
+  },
+  "reve_qjbe08_exp8_layer16": {
+    "separable": 0.41259765625,
+    "entangled": 0.47021484375,
+    "dead": 0.1171875
+  },
+  "reve_qjbe08_exp16_layer16": {
+    "separable": 0.4654541015625,
+    "entangled": 0.3438720703125,
+    "dead": 0.190673828125
+  },
+  "reve_qjbe08_exp32_layer16": {
+    "separable": 0.4755859375,
+    "entangled": 0.20111083984375,
+    "dead": 0.32330322265625
+  },
+  "reve_qjbe08_exp64_layer16": {
+    "separable": 0.38995361328125,
+    "entangled": 0.112945556640625,
+    "dead": 0.497100830078125
+  },
+  "reve_qjbe08_layer17": {
+    "separable": 0.275390625,
+    "entangled": 0.701171875,
+    "dead": 0.0234375
+  },
+  "reve_qjbe08_exp2_layer17": {
+    "separable": 0.2939453125,
+    "entangled": 0.6728515625,
+    "dead": 0.033203125
+  },
+  "reve_qjbe08_exp4_layer17": {
+    "separable": 0.36376953125,
+    "entangled": 0.5791015625,
+    "dead": 0.05712890625
+  },
+  "reve_qjbe08_exp8_layer17": {
+    "separable": 0.437255859375,
+    "entangled": 0.45361328125,
+    "dead": 0.109130859375
+  },
+  "reve_qjbe08_exp16_layer17": {
+    "separable": 0.494140625,
+    "entangled": 0.3165283203125,
+    "dead": 0.1893310546875
+  },
+  "reve_qjbe08_exp32_layer17": {
+    "separable": 0.49249267578125,
+    "entangled": 0.19073486328125,
+    "dead": 0.3167724609375
+  },
+  "reve_qjbe08_exp64_layer17": {
+    "separable": 0.4146728515625,
+    "entangled": 0.10552978515625,
+    "dead": 0.47979736328125
+  },
+  "reve_qjbe08_layer18": {
+    "separable": 0.19140625,
+    "entangled": 0.76953125,
+    "dead": 0.0390625
+  },
+  "reve_qjbe08_exp2_layer18": {
+    "separable": 0.2724609375,
+    "entangled": 0.6708984375,
+    "dead": 0.056640625
+  },
+  "reve_qjbe08_exp4_layer18": {
+    "separable": 0.29833984375,
+    "entangled": 0.6474609375,
+    "dead": 0.05419921875
+  },
+  "reve_qjbe08_exp8_layer18": {
+    "separable": 0.4208984375,
+    "entangled": 0.460205078125,
+    "dead": 0.118896484375
+  },
+  "reve_qjbe08_exp16_layer18": {
+    "separable": 0.460205078125,
+    "entangled": 0.30908203125,
+    "dead": 0.230712890625
+  },
+  "reve_qjbe08_exp32_layer18": {
+    "separable": 0.4461669921875,
+    "entangled": 0.1915283203125,
+    "dead": 0.3623046875
+  },
+  "reve_qjbe08_exp64_layer18": {
+    "separable": 0.382904052734375,
+    "entangled": 0.10723876953125,
+    "dead": 0.509857177734375
+  },
+  "reve_qjbe08_layer19": {
+    "separable": 0.25390625,
+    "entangled": 0.708984375,
+    "dead": 0.037109375
+  },
+  "reve_qjbe08_exp2_layer19": {
+    "separable": 0.2451171875,
+    "entangled": 0.712890625,
+    "dead": 0.0419921875
+  },
+  "reve_qjbe08_exp4_layer19": {
+    "separable": 0.318359375,
+    "entangled": 0.61279296875,
+    "dead": 0.06884765625
+  },
+  "reve_qjbe08_exp8_layer19": {
+    "separable": 0.410400390625,
+    "entangled": 0.44873046875,
+    "dead": 0.140869140625
+  },
+  "reve_qjbe08_exp16_layer19": {
+    "separable": 0.463134765625,
+    "entangled": 0.2806396484375,
+    "dead": 0.2562255859375
+  },
+  "reve_qjbe08_exp32_layer19": {
+    "separable": 0.42510986328125,
+    "entangled": 0.17022705078125,
+    "dead": 0.4046630859375
+  },
+  "reve_qjbe08_exp64_layer19": {
+    "separable": 0.34210205078125,
+    "entangled": 0.092559814453125,
+    "dead": 0.565338134765625
+  },
+  "reve_qjbe08_layer20": {
+    "separable": 0.30859375,
+    "entangled": 0.640625,
+    "dead": 0.05078125
+  },
+  "reve_qjbe08_exp2_layer20": {
+    "separable": 0.3291015625,
+    "entangled": 0.6142578125,
+    "dead": 0.056640625
+  },
+  "reve_qjbe08_exp4_layer20": {
+    "separable": 0.3671875,
+    "entangled": 0.5419921875,
+    "dead": 0.0908203125
+  },
+  "reve_qjbe08_exp8_layer20": {
+    "separable": 0.452880859375,
+    "entangled": 0.364013671875,
+    "dead": 0.18310546875
+  },
+  "reve_qjbe08_exp16_layer20": {
+    "separable": 0.450439453125,
+    "entangled": 0.232177734375,
+    "dead": 0.3173828125
+  },
+  "reve_qjbe08_exp32_layer20": {
+    "separable": 0.39874267578125,
+    "entangled": 0.12548828125,
+    "dead": 0.47576904296875
+  },
+  "reve_qjbe08_exp64_layer20": {
+    "separable": 0.2828369140625,
+    "entangled": 0.0673828125,
+    "dead": 0.6497802734375
+  },
+  "reve_qjbe08_layer21": {
+    "separable": 0.37109375,
+    "entangled": 0.318359375,
+    "dead": 0.310546875
+  },
+  "reve_qjbe08_exp2_layer21": {
+    "separable": 0.30859375,
+    "entangled": 0.2265625,
+    "dead": 0.46484375
+  },
+  "reve_qjbe08_exp4_layer21": {
+    "separable": 0.259765625,
+    "entangled": 0.11328125,
+    "dead": 0.626953125
+  },
+  "reve_qjbe08_exp8_layer21": {
+    "separable": 0.19091796875,
+    "entangled": 0.0693359375,
+    "dead": 0.73974609375
+  },
+  "reve_qjbe08_exp16_layer21": {
+    "separable": 0.1380615234375,
+    "entangled": 0.0423583984375,
+    "dead": 0.819580078125
+  },
+  "reve_qjbe08_exp32_layer21": {
+    "separable": 0.08734130859375,
+    "entangled": 0.02044677734375,
+    "dead": 0.8922119140625
+  },
+  "reve_qjbe08_exp64_layer21": {
+    "separable": 0.045501708984375,
+    "entangled": 0.008758544921875,
+    "dead": 0.94573974609375
+  }
+}

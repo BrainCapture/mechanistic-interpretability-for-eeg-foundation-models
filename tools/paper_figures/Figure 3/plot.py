@@ -1,4 +1,4 @@
-"""Paper Figure: 3 encoders × 3 taxonomy metrics (sep / ent / dead) heatmaps.
+"""Figure 3: 3 encoders x 3 taxonomy metrics (sep / ent / dead) heatmaps.
 
 Layout (one block per encoder, stacked vertically):
 
@@ -9,14 +9,19 @@ Layout (one block per encoder, stacked vertically):
 Each row uses an independent subgridspec so column widths within an encoder
 match its number of expansion ratios; row heights match the number of layers.
 
-Renders LaTeX text + serif font + larger labels for paper readability.
+Source data: ``data.json`` (next to this script). Each entry maps the
+experiment name (e.g. ``sleepfm_finetuned_exp4_layer1``) to a
+``{separable, entangled, dead}`` dict — pre-classified percentages
+extracted from the development repo's per-experiment ``taxonomy_cache.pt``
+files (see README.md for provenance).
 
 Output::
 
-    paper/figures/taxonomy_paper_grid.{png,pdf}
+    Figure 3/figure.{png,pdf}
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -24,16 +29,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-import torch
 from matplotlib.colors import LinearSegmentedColormap
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parent.parent.parent  # repo root: Figure 3/ -> paper_figures/ -> tools/ -> repo
-EXP_DIR = ROOT / "results" / "experiments"
-
-import sys
-sys.path.insert(0, str(ROOT / "tools"))
-from plot_taxonomy_expansion import _classify  # type: ignore
+DATA_PATH = HERE / "data.json"
 
 
 # ── Paper-ready styling (mathtext serif — LaTeX-look without TeX dep) ────────-
@@ -95,36 +94,19 @@ ENCODER_GRIDS = [
 ]
 
 
+_TAXONOMY_TABLE: Optional[dict] = None
+
+
 def _load_taxonomy(exp_name: str) -> Optional[dict]:
-    exp_dir = EXP_DIR / exp_name
-    cache_path: Optional[Path] = None
-    for cand in ("taxonomy_cache.pt", "app_cache.pt"):
-        p = exp_dir / cand
-        if p.exists():
-            cache_path = p; break
-    if cache_path is None:
-        return None
-    cache = torch.load(cache_path, map_location="cpu", weights_only=False)
-    enr = cache.get("feature_meta_enrichment")
-    if not enr:
-        return None
-    feature_stats = cache.get("feature_stats") or []
-    meta = cache.get("meta") or {}
-    n_features = meta.get("n_features", len(enr))
-    k = meta.get("k", 8)
-    expected = 100.0 * k / max(n_features, 1)
-    fr = (
-        np.array([s.get("fire_rate_pct", 0.0) for s in feature_stats], dtype=float)
-        if feature_stats else None
-    )
-    if fr is not None and len(fr) != len(enr):
-        fr = None
-    fracs = _classify(enr, fire_rates_pct=fr, expected_rate_pct=expected)
-    return {
-        "separable": fracs["separable"],
-        "entangled": fracs["entangled"],
-        "dead":      fracs["dead"] + fracs["inactive"] + fracs["uncharacterized"],
-    }
+    """Return pre-classified taxonomy fractions for `exp_name`, or None if absent.
+
+    Data is read once from ``data.json``; on subsequent calls a cached lookup
+    table is used. See README.md for the JSON schema and provenance.
+    """
+    global _TAXONOMY_TABLE
+    if _TAXONOMY_TABLE is None:
+        _TAXONOMY_TABLE = json.loads(DATA_PATH.read_text())
+    return _TAXONOMY_TABLE.get(exp_name)
 
 
 def _build_matrices(grid):
