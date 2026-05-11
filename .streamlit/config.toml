@@ -1,0 +1,13 @@
+[server]
+port = 8080
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+maxUploadSize = 200
+enableWebsocketCompression = false
+
+[browser]
+gatherUsageStats = false
+
+[runner]
+fastReruns = false

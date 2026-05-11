@@ -24,6 +24,11 @@ dependencies = [
 ]
 
 [dependency-groups]
+# Interactive Streamlit explorer (`uv run streamlit run app/main.py`)
+app = [
+  "streamlit>=1.43.0",
+  "plotly>=6.0.0",
+]
 dev = [
   "ruff",
   "isort",

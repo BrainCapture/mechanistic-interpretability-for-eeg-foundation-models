@@ -10,6 +10,7 @@ Companion code repository for the preprint **"Mechanistic Interpretability of EE
 src/mecheeg/          Core library: SAE, spectral decoder, TCAV, encoder wrappers, dataset
 tools/                Analysis pipeline scripts (SAE/spectral decoder/TCAV training, steering, probes)
 tools/paper_figures/  Per-figure self-contained directories (plot.py + data + rendered figure)
+app/                  Interactive Streamlit explorer (browse SAE features, TCAV scores, steering)
 ```
 
 ## What this repo does *not* contain (and why)
@@ -65,10 +66,19 @@ regenerates Figure N. Every matplotlib figure (2, 3, 4, 5, 6, 7) is self-contain
 
 ```bash
 # Python 3.12 required
-uv sync          # installs the dependencies declared in pyproject.toml
+uv sync                # core dependencies
+uv sync --group app    # + Streamlit & Plotly (for the explorer)
 ```
 
 Most scripts accept a `--help` flag describing their inputs and outputs.
+
+## Interactive explorer
+
+```bash
+uv run streamlit run app/main.py
+```
+
+The app walks through the SAE features, TCAV concept attributions, and concept steering interactively. Without the result caches (which require the private dataset + encoder weights — see the section above), each tab will display a "build this cache first" message and the matching `tools/...` command. The development repo runs against full caches; on this anonymous-review repo the value is in (a) reading how the analyses are presented and (b) verifying the code is self-consistent.
 
 ## Citation
 
