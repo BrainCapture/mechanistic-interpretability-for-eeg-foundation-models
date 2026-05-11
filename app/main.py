@@ -398,7 +398,7 @@ def sidebar():
 
     # ── Encoder ───────────────────────────────────────────────────────
     _ENC_LABELS = {"sleepfm": "SleepFM", "reve": "REVE", "labram": "LaBraM"}
-    _ENC_ORDER  = ["sleepfm", "labram", "reve"]
+    _ENC_ORDER  = ["sleepfm", "reve", "labram"]
     enc_keys    = [e for e in _ENC_ORDER if e in runs]
     enc_display = [_ENC_LABELS[e] for e in enc_keys]
 
@@ -414,25 +414,25 @@ def sidebar():
     # ── Expansion ─────────────────────────────────────────────────────
     expansions = sorted(runs[encoder].keys())
     def _fmt_E(E: float) -> str:
-        return f"E={int(E)}" if float(E).is_integer() else f"E={E}"
-    E_display = [_fmt_E(E) for E in expansions]
-    # Default to E=1 if available, else the smallest expansion.
-    _E_default = _fmt_E(1.0) if 1.0 in expansions else E_display[0]
+        return f"{int(E)}×" if float(E).is_integer() else f"{E}×"
 
     st.sidebar.markdown("**Expansion**")
     if len(expansions) >= 2:
-        E_choice = st.sidebar.pills(
-            "Expansion", E_display,
-            default=_E_default if _E_default in E_display else E_display[0],
+        _E_default = 1.0 if 1.0 in expansions else expansions[0]
+        expansion = st.sidebar.select_slider(
+            "Expansion", expansions,
+            value=_E_default,
+            format_func=_fmt_E,
             label_visibility="collapsed",
-            key="E_pills",
+            key="E_slider",
         )
-        expansion = expansions[E_display.index(E_choice)]
     else:
         expansion = expansions[0]
         st.sidebar.caption(f"Only {_fmt_E(expansion)} available for {enc_choice}")
 
     # ── Layer ─────────────────────────────────────────────────────────
+    # Some (encoder, E) combinations only have a subset of layers — that's
+    # surfaced naturally by the dropdown options.
     layers = sorted(runs[encoder][expansion].keys())
 
     st.sidebar.markdown("**Layer**")
@@ -444,18 +444,12 @@ def sidebar():
     )
 
     # ── k (sparsity) ──────────────────────────────────────────────────
+    # Always pick the smallest k available (the paper's primary regime is
+    # k=8 — a fixed low number of active features regardless of dictionary
+    # size). Higher-k "k-scaled" variants are intentionally not exposed in
+    # the sidebar.
     k_options = sorted(runs[encoder][expansion][layer].keys())
-    st.sidebar.markdown("**k**")
-    if len(k_options) >= 2:
-        k_sel = st.sidebar.pills(
-            "k", k_options,
-            default=k_options[0],
-            label_visibility="collapsed",
-            key="k_pills",
-        )
-    else:
-        k_sel = k_options[0]
-        st.sidebar.caption(f"k = {k_sel}")
+    k_sel = k_options[0]
 
     selection_key = (encoder, expansion, layer, k_sel)
     sae_path    = str(runs[encoder][expansion][layer][k_sel])
@@ -485,12 +479,18 @@ def sidebar():
     else:
         st.sidebar.caption(f"`{folder_name}` (no experiment metadata)")
 
+    if isinstance(meta_k, (int, float)) and isinstance(n_feat, int) and n_feat > 0:
+        sparsity_pct = 100.0 * float(meta_k) / n_feat
+        sparsity_lbl = f"{sparsity_pct:.2f}%"
+    else:
+        sparsity_lbl = "?"
+
     ca, cb = st.sidebar.columns(2)
     ca.metric("Features",  f"{n_feat:,}" if isinstance(n_feat, int) else n_feat)
     cb.metric("Embed dim", str(edim))
     cc, cd = st.sidebar.columns(2)
     cc.metric("Expansion", f"{meta_E}×")
-    cd.metric("Top-k",     str(meta_k))
+    cd.metric("Sparsity",  sparsity_lbl, help=f"Top-k = {meta_k}")
 
     def _dot(ok: bool) -> str:
         return "🟢" if ok else "🟠"
