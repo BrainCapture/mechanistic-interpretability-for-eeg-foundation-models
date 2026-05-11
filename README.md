@@ -51,23 +51,21 @@ frozen encoder  →  SAE  →  XAE (spectral decoder)
 | 3. Compute TCAV (concept attribution) | `tools/run_tcav.py` | `results/tcav/{experiment}/tcav_cache.pt` |
 | 4. Build steering cache | `tools/build_steering_cache.py` | `results/steering_cache/{experiment}/` |
 | 5. Compute monosemanticity taxonomy | `tools/analyze_monosemanticity.py` | per-experiment |
-| 6. Generate paper figures | `tools/paper_figures/plot_*.py` | `paper/figures/*.{png,pdf}` |
+| 6. Generate paper figures | `tools/paper_figures/Figure N/plot.py` | `tools/paper_figures/Figure N/figure.{png,pdf}` |
 
 Full pipeline documentation: `docs/paper_figures.md` (figure → script registry), `docs/concept_steering_cross_model_plan.md` (cross-model steering methodology), `docs/granular_training_plan.md` (granular-label experiments).
 
 ## Paper figures
 
-The scripts that produced each figure in the paper are in [`tools/paper_figures/`](tools/paper_figures/):
+Each figure has its own self-contained directory under [`tools/paper_figures/`](tools/paper_figures/) — a `plot.py`, the bundled input `data.{json,npz}` where applicable, the rendered `figure.{png,pdf}`, and a `README.md` describing the figure and its data provenance.
 
-| Paper figure | Script |
-|---|---|
-| Pipeline diagram | (hand-drawn, not script-generated) |
-| Dictionary size | `plot_dictionary_size.py` |
-| Layer-sweep faithfulness | `plot_layer_sweep_kfold_wide.py` |
-| Taxonomy grid | `plot_paper_taxonomy_grid.py` |
-| Concept steering curves (3×3) | `plot_concept_steering_curves_3x3_paper.py` |
-| Cross-model steering | `plot_cross_model_steering_concepts_v2_optimalE.py` |
-| Perfect steering (3-panel) | `plot_perfect_steering_three_panel.py` |
+```bash
+uv run python "tools/paper_figures/Figure N/plot.py"
+```
+
+regenerates Figure N. Every matplotlib figure (2, 3, 4, 5, 6, 7) is self-contained — no `results/`, encoder weights, or EEG data needed. Figure 1 is an interactive React figure; see [its README](tools/paper_figures/Figure%201/CLAUDE.md).
+
+See [`tools/paper_figures/README.md`](tools/paper_figures/README.md) for the figure → data-bundling status table.
 
 ## Installation
 
