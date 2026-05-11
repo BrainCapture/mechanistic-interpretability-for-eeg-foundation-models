@@ -391,10 +391,49 @@ def sidebar():
     st.sidebar.title("Mechanistic Interpretability for EEG Foundation Models")
     st.sidebar.markdown("---")
 
-    runs, exp_for, folder_for = discover_runs()
-    if not runs:
+    runs_all, exp_for, folder_for = discover_runs()
+    if not runs_all:
         st.sidebar.error("No SAE checkpoints found under results/features/")
         st.stop()
+
+    # ── Data-availability filter ──────────────────────────────────────
+    # By default, hide configurations that have no app_cache.pt — most
+    # tabs are uninteresting without it. The toggle lets power users opt
+    # into exploring every SAE checkpoint on disk.
+    only_with_cache = st.sidebar.toggle(
+        "Only configs with data",
+        value=True,
+        help=(
+            "When on, the selectors below only show (encoder, expansion, "
+            "layer, sparsity) combinations that have a precomputed "
+            "`app_cache.pt`. Turn off to see every trained SAE."
+        ),
+        key="filter_with_cache",
+    )
+
+    def _filter_runs(src: dict) -> dict:
+        if not only_with_cache:
+            return src
+        out: dict = {}
+        for enc, by_E in src.items():
+            for E, by_L in by_E.items():
+                for L, by_K in by_L.items():
+                    for K in by_K:
+                        exp_name = exp_for.get((enc, E, L, K))
+                        if exp_name and (
+                            ROOT / "results" / "experiments" / exp_name / "app_cache.pt"
+                        ).exists():
+                            out.setdefault(enc, {}).setdefault(E, {}).setdefault(L, {})[K] = by_K[K]
+        return out
+
+    runs = _filter_runs(runs_all)
+    if not runs:
+        st.sidebar.warning(
+            "No configs have a built `app_cache.pt` yet. Toggle off "
+            "**Only configs with data** to browse SAE checkpoints without "
+            "downstream caches."
+        )
+        runs = runs_all
 
     # ── Encoder ───────────────────────────────────────────────────────
     _ENC_LABELS = {"sleepfm": "SleepFM", "reve": "REVE", "labram": "LaBraM"}
@@ -551,7 +590,6 @@ def sidebar():
         "Concept Steering",
         "Attention Explorer",
         "SAE Analysis",
-        "Model Comparison",
     ]
     page = st.sidebar.radio(
         "Page",
@@ -615,7 +653,6 @@ def page_home() -> None:
         ("Concept Steering", "Zero out SAE features encoding a demographic concept and measure whether that concept becomes undecodable from the reconstructed EEG.", "App cache + SAE checkpoint"),
         ("Attention Explorer", "Inspect transformer self-attention maps alongside SAE feature activations for individual 60-second windows.", "App cache"),
         ("SAE Analysis", "Hyperparameter sweep (R² / dead-neuron heatmaps) and feature taxonomy — three-way classification of SAE features as separable, entangled, or spurious.", ""),
-        ("Model Comparison", "Cross-model table of spectral reconstruction R², TCAV scores, and pipeline artifact availability.", ""),
     ]
 
     cols_per_row = 3
@@ -2452,336 +2489,6 @@ def _exp_name_to_encoder_layer(exp_name: str):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Page 6 — Model Comparison
-# ─────────────────────────────────────────────────────────────────────────────
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _scan_artefact_availability() -> list:
-    """Scan results/ directories and return availability rows. Cached 60 s."""
-    features_root = ROOT / "results" / "features"
-    spectral_decoder_root      = ROOT / "results" / "spectral_decoder"
-    exp_root      = ROOT / "results" / "experiments"
-    tcav_root2    = ROOT / "results" / "tcav"
-
-    rows: list = []
-    if not features_root.exists():
-        return rows
-    runs, exp_for, _ = discover_runs()
-    for enc in runs:
-        for E in runs[enc]:
-            for layer in runs[enc][E]:
-                for k_val in runs[enc][E][layer]:
-                    exp_name = exp_for.get((enc, E, layer, k_val))
-                    spectral_decoder_ok = (
-                        spectral_decoder_root / enc / "spectral_decoder_checkpoint.pt"
-                    ).exists()
-                    cache_ok = (
-                        exp_root / exp_name / "app_cache.pt"
-                    ).exists() if exp_name else False
-                    tcav_ok = (
-                        tcav_root2 / exp_name / "tcav_cache.pt"
-                    ).exists() if exp_name else False
-                    rows.append({
-                        "Encoder":   MODEL_CARDS.get(enc, {}).get("display_name", enc),
-                        "Expansion": int(E) if float(E).is_integer() else E,
-                        "Layer":     layer,
-                        "k":         k_val,
-                        "SAE":       "✓",
-                        "Spectral decoder": "✓" if spectral_decoder_ok else "—",
-                        "App cache":        "✓" if cache_ok else "—",
-                        "TCAV":             "✓" if tcav_ok else "—",
-                    })
-    return rows
-
-
-def page_model_comparison():
-    import pandas as pd
-
-    st.header("Model Comparison")
-    st.caption(
-        "Cross-model comparison of spectral decoder reconstruction quality, "
-        "TCAV concept selectivity, and dataset availability."
-    )
-
-    sub_spectral_decoder, sub_tcav, sub_avail = st.tabs(
-        ["Spectral Reconstruction", "TCAV Scores", "Availability"]
-    )
-
-    # ── Sub-tab 1: spectral decoder reconstruction ─────────────────────────────
-    with sub_spectral_decoder:
-        st.subheader("Spectral Decoder Reconstruction Quality")
-        st.caption(
-            "Amplitude R² and phase cosine similarity across SleepFM variants. "
-            "Run `uv run tools/compare_spectral_decoder.py` to generate or refresh these metrics."
-        )
-
-        metrics = _load_spectral_decoder_comparison_metrics()
-
-        if metrics is None:
-            st.info(
-                "No comparison metrics found.  Build them with:\n\n"
-                "```\nuv run tools/compare_spectral_decoder.py\n```"
-            )
-        else:
-            bands       = ["delta", "theta", "alpha", "low-beta", "high-beta", "gamma"]
-            model_keys  = list(metrics.keys())
-            disp_names  = [metrics[k]["display_name"] for k in model_keys]
-
-            # ── Overall summary ─────────────────────────────────────────────
-            col1, col2 = st.columns(2)
-
-            with col1:
-                amp_vals = [metrics[k]["amp_r2"] for k in model_keys]
-                fig_amp = go.Figure(go.Bar(
-                    x=disp_names,
-                    y=amp_vals,
-                    marker_color=[BAND_COLORS.get("alpha", "#ff7f0e")] * len(model_keys),
-                    text=[f"{v:.3f}" for v in amp_vals],
-                    textposition="outside",
-                ))
-                fig_amp.update_layout(
-                    title="Overall Amplitude R²",
-                    yaxis=dict(range=[0, 1.05], title="R²"),
-                    xaxis_tickangle=-30,
-                    height=380,
-                    margin=dict(t=50, b=80),
-                )
-                st.plotly_chart(fig_amp, use_container_width=True)
-
-            with col2:
-                ph_vals = [metrics[k]["phase_cosim"] for k in model_keys]
-                fig_ph = go.Figure(go.Bar(
-                    x=disp_names,
-                    y=ph_vals,
-                    marker_color=[BAND_COLORS.get("theta", "#2ca02c")] * len(model_keys),
-                    text=[f"{v:.3f}" for v in ph_vals],
-                    textposition="outside",
-                ))
-                fig_ph.add_hline(y=0, line_dash="dash", line_color="gray",
-                                  annotation_text="chance")
-                fig_ph.update_layout(
-                    title="Overall Phase Cosine Similarity",
-                    yaxis=dict(range=[-0.25, 1.05], title="Cosine sim"),
-                    xaxis_tickangle=-30,
-                    height=380,
-                    margin=dict(t=50, b=80),
-                )
-                st.plotly_chart(fig_ph, use_container_width=True)
-
-            # ── Per-band comparison ─────────────────────────────────────────
-            metric_choice = st.radio(
-                "Per-band metric",
-                ["Amplitude R²", "Phase cosine similarity"],
-                horizontal=True,
-                key="spectral_decoder_band_metric",
-            )
-            metric_key = "band_amp_r2" if metric_choice == "Amplitude R²" else "band_phase_cosim"
-            y_label    = "R²" if metric_choice == "Amplitude R²" else "Cosine sim"
-
-            fig_band = go.Figure()
-            for k, name in zip(model_keys, disp_names):
-                band_vals = [metrics[k][metric_key].get(b, None) for b in bands]
-                fig_band.add_trace(go.Bar(
-                    name=name,
-                    x=bands,
-                    y=band_vals,
-                    text=[f"{v:.2f}" if v is not None else "" for v in band_vals],
-                    textposition="outside",
-                ))
-            if metric_choice == "Phase cosine similarity":
-                fig_band.add_hline(y=0, line_dash="dash", line_color="gray",
-                                    annotation_text="chance")
-            fig_band.update_layout(
-                barmode="group",
-                title=f"Per-band {metric_choice}",
-                yaxis=dict(title=y_label, range=[0, 1.1] if metric_choice == "Amplitude R²"
-                           else [-0.3, 1.1]),
-                height=420,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                margin=dict(t=80, b=40),
-            )
-            st.plotly_chart(fig_band, use_container_width=True)
-
-    # ── Sub-tab 2: TCAV scores ──────────────────────────────────────────────
-    with sub_tcav:
-        st.subheader("TCAV Concept Selectivity")
-        st.caption(
-            "Model-level TCAV scores (Kim et al. Variant C) — fraction of concept examples "
-            "where the downstream probe sensitivity is positive.  0.5 = chance, 1.0 = perfect. "
-            "Requires TCAV caches built with `uv run tools/run_tcav.py --experiment <name>`."
-        )
-
-        tcav_data = _load_all_tcav_caches_for_comparison()
-
-        if not tcav_data:
-            st.info(
-                "No TCAV caches found.  Build them per-experiment with:\n\n"
-                "```\nuv run tools/run_tcav.py --experiment sleepfm_v2.4_layer5\n```"
-            )
-        else:
-            # Parse all experiment names → {encoder: {layer: data}}
-            by_encoder: dict = {}
-            for exp_name, d in tcav_data.items():
-                enc, layer = _exp_name_to_encoder_layer(exp_name)
-                by_encoder.setdefault(enc, {})[layer] = d
-
-            # Controls
-            col_ctrl1, col_ctrl2 = st.columns([2, 3])
-            with col_ctrl1:
-                all_layers = sorted({L for enc_d in by_encoder.values() for L in enc_d})
-                default_layer = max(all_layers)
-                sel_layer = st.selectbox(
-                    "Layer",
-                    options=all_layers,
-                    index=all_layers.index(default_layer) if default_layer in all_layers else 0,
-                    key="tcav_cmp_layer",
-                )
-            with col_ctrl2:
-                tcav_metric = st.radio(
-                    "Metric",
-                    ["Model TCAV score", "CAV accuracy", "Probe accuracy"],
-                    horizontal=True,
-                    key="tcav_cmp_metric",
-                )
-
-            # Build matrix for selected layer
-            encoders_with_layer = [enc for enc, d in by_encoder.items() if sel_layer in d]
-            if not encoders_with_layer:
-                st.warning(f"No TCAV caches available for layer {sel_layer}.")
-            else:
-                # Collect concept names (use union; most experiments share the same set)
-                all_concepts: list = []
-                for enc in encoders_with_layer:
-                    c = by_encoder[enc][sel_layer]["concept_names"]
-                    if len(c) > len(all_concepts):
-                        all_concepts = c
-
-                metric_field = {
-                    "Model TCAV score": "model_tcav_scores",
-                    "CAV accuracy":     "cav_accuracies",
-                    "Probe accuracy":   "probe_accuracies",
-                }[tcav_metric]
-
-                # Rows = encoders, Cols = concepts
-                matrix = []
-                row_labels = []
-                for enc in encoders_with_layer:
-                    row_labels.append(
-                        MODEL_CARDS[enc]["display_name"] if enc in MODEL_CARDS else enc
-                    )
-                    d = by_encoder[enc][sel_layer]
-                    vals = d.get(metric_field) or []
-                    concept_map = dict(zip(d["concept_names"], vals))
-                    row = [concept_map.get(c, float("nan")) for c in all_concepts]
-                    matrix.append(row)
-
-                import numpy as np
-                z = np.array(matrix, dtype=float)
-
-                # Colour scale: for TCAV scores, centre at 0.5 (chance)
-                if tcav_metric == "Model TCAV score":
-                    cmin, cmax, zmid = 0.0, 1.0, 0.5
-                    colorscale = "RdBu_r"
-                else:
-                    cmin, cmax, zmid = 0.5, 1.0, 0.75
-                    colorscale = "Blues"
-
-                text_z = [[f"{v:.2f}" if not np.isnan(v) else "—"
-                           for v in row] for row in z]
-
-                fig_heat = go.Figure(go.Heatmap(
-                    z=z,
-                    x=all_concepts,
-                    y=row_labels,
-                    text=text_z,
-                    texttemplate="%{text}",
-                    colorscale=colorscale,
-                    zmid=zmid,
-                    zmin=cmin,
-                    zmax=cmax,
-                    colorbar=dict(title=tcav_metric),
-                ))
-                fig_heat.update_layout(
-                    title=f"{tcav_metric} — layer {sel_layer}",
-                    xaxis=dict(title="Concept", tickangle=-30),
-                    yaxis=dict(title="Encoder"),
-                    height=max(300, 60 * len(encoders_with_layer) + 120),
-                    margin=dict(t=60, b=100),
-                )
-                st.plotly_chart(fig_heat, use_container_width=True)
-
-                if tcav_metric == "Model TCAV score":
-                    st.caption(
-                        "Red = below chance (model actively avoids this concept), "
-                        "white = chance (0.5), "
-                        "blue = above chance (model is selective for this concept)."
-                    )
-
-                # Also show a bar chart for a single selected concept
-                st.markdown("---")
-                sel_concept = st.selectbox(
-                    "Concept detail",
-                    options=all_concepts,
-                    key="tcav_cmp_concept",
-                )
-                concept_idx = all_concepts.index(sel_concept)
-                concept_vals = [matrix[i][concept_idx] for i in range(len(row_labels))]
-                fig_bar = go.Figure(go.Bar(
-                    x=row_labels,
-                    y=concept_vals,
-                    text=[f"{v:.3f}" if not np.isnan(v) else "—" for v in concept_vals],
-                    textposition="outside",
-                    marker_color=[
-                        "#d62728" if v < 0.5 else "#1f77b4"
-                        for v in concept_vals
-                    ],
-                ))
-                if tcav_metric == "Model TCAV score":
-                    fig_bar.add_hline(y=0.5, line_dash="dash", line_color="gray",
-                                       annotation_text="chance (0.5)")
-                fig_bar.update_layout(
-                    title=f"{tcav_metric}: «{sel_concept}» — layer {sel_layer}",
-                    yaxis=dict(title=tcav_metric, range=[0, 1.05]),
-                    xaxis_tickangle=-30,
-                    height=360,
-                    margin=dict(t=60, b=80),
-                )
-                st.plotly_chart(fig_bar, use_container_width=True)
-
-    # ── Sub-tab 3: Availability ─────────────────────────────────────────────
-    with sub_avail:
-        st.subheader("Artefact Availability")
-        st.caption("Which pipeline artefacts have been built for each encoder and layer.")
-
-        rows = _scan_artefact_availability()
-
-        if rows:
-            import pandas as pd
-            df = pd.DataFrame(rows)
-            st.dataframe(
-                df,
-                hide_index=True,
-                use_container_width=True,
-                column_config={
-                    "Encoder":    st.column_config.TextColumn(width="medium"),
-                    "Layer":      st.column_config.NumberColumn(width="small"),
-                    "SAE":        st.column_config.TextColumn(width="small"),
-                    "Spectral decoder":       st.column_config.TextColumn(width="small"),
-                    "App cache":  st.column_config.TextColumn(width="small"),
-                    "TCAV":       st.column_config.TextColumn(width="small"),
-                },
-            )
-            total = len(rows)
-            have_tcav = sum(1 for r in rows if r["TCAV"] == "✓")
-            have_cache = sum(1 for r in rows if r["App cache"] == "✓")
-            st.caption(
-                f"{total} SAE checkpoints · {have_cache}/{total} app caches · "
-                f"{have_tcav}/{total} TCAV caches"
-            )
-        else:
-            st.info("No SAE checkpoints found in `results/features/`.")
-
-
 def _render_tokenizer_clusters(cache: dict, k: int) -> None:
     """Show per-cluster band/label breakdown and representative EEG waveforms."""
     km_data       = cache["kmeans"][k]
@@ -4691,9 +4398,6 @@ def main():
         page_sae_analysis(run_data, folder_name)
         return
 
-    if page == "Model Comparison":
-        page_model_comparison()
-        return
 
 
 if __name__ == "__main__":
