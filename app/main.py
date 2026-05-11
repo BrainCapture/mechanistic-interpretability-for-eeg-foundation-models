@@ -412,19 +412,15 @@ def sidebar():
     encoder = enc_keys[enc_display.index(enc_choice)]
 
     # ── Helpers ───────────────────────────────────────────────────────
-    # Tick row: render the option labels in a flex row directly under a
-    # select_slider so the user can see all snap positions at a glance.
-    def _tick_row(labels: list[str], current_idx: int) -> None:
-        spans = [
-            (f'<span style="font-weight:700;color:#f7c948;">{lbl}</span>'
-             if i == current_idx
-             else f'<span style="color:#888;">{lbl}</span>')
-            for i, lbl in enumerate(labels)
-        ]
+    # Subtle row of snap-point labels under a select_slider. The slider's
+    # own value indicator handles "which one is selected", so this row is
+    # purely informational — kept light/muted to avoid visual clutter.
+    def _tick_row(labels: list[str]) -> None:
         html = (
             '<div style="display:flex;justify-content:space-between;'
-            'font-size:0.72rem;padding:0 6px;margin:-10px 0 6px;">'
-            + "".join(spans)
+            'font-size:0.68rem;color:rgba(150,150,150,0.75);'
+            'padding:0 8px;margin:-4px 0 10px;letter-spacing:0.02em;">'
+            + "".join(f"<span>{lbl}</span>" for lbl in labels)
             + "</div>"
         )
         st.sidebar.markdown(html, unsafe_allow_html=True)
@@ -444,7 +440,7 @@ def sidebar():
             label_visibility="collapsed",
             key="E_slider",
         )
-        _tick_row([_fmt_E(E) for E in expansions], expansions.index(expansion))
+        _tick_row([_fmt_E(E) for E in expansions])
     else:
         expansion = expansions[0]
         st.sidebar.caption(f"Only {_fmt_E(expansion)} available for {enc_choice}")
@@ -484,7 +480,7 @@ def sidebar():
             label_visibility="collapsed",
             key="k_slider",
         )
-        _tick_row([_fmt_k_pct(k) for k in k_options], k_options.index(k_sel))
+        _tick_row([_fmt_k_pct(k) for k in k_options])
     else:
         k_sel = k_options[0]
         st.sidebar.caption(f"{_fmt_k_pct(k_sel)} (k = {k_sel})")
@@ -596,25 +592,14 @@ def page_home() -> None:
     st.title("Mechanistic Interpretability for EEG Foundation Models")
     st.caption("Anonymous Authors · Affiliations withheld for anonymous review")
     st.markdown(
-        "An interactive companion to the paper. We apply layer-wise TopK Sparse "
-        "Autoencoders (SAEs) to three architecturally distinct EEG foundation models — "
-        "**SleepFM** (multi-modal contrastive), **REVE** (masked-token reconstruction), "
-        "and **LaBraM** (masked spectrum prediction) — each fine-tuned end-to-end on the "
-        "same binary normal/abnormal target. A small spectral decoder maps token "
-        "embeddings back to amplitude per EEG frequency band, so every SAE feature can "
-        "be inspected as an interpretable spectral signature."
-    )
-    st.markdown(
-        "We introduce **concept steering**: substituting concept-enriched SAE feature "
-        "activations with a target-group centroid and decoding through the spectral "
-        "decoder, providing mechanistic, visualisable evidence of what each feature "
-        "encodes. A key finding is that the standard monosemanticity criterion is "
-        "*systematically violated* in clinical EEG — not as a model failure, but "
-        "because age and pathology share a biological substrate (δ/θ slow waves). "
-        "We redefine monosemanticity with a three-way taxonomy — **separable**, "
-        "**entangled**, and **dead** — and show via an SAE expansion sweep that the "
-        "age × pathology entanglement is biologically irreducible: it persists at all "
-        "expansion ratios while spurious polysemanticity resolves with capacity."
+        "EEG foundation models achieve state-of-the-art clinical performance, yet their "
+        "internal computations remain opaque. We apply TopK Sparse Autoencoders across "
+        "SleepFM, REVE, and LaBraM to extract interpretable feature dictionaries grounded "
+        "in a clinical taxonomy, and use **concept steering** with a target-vs-off-target "
+        "metric to expose three regimes — selectively steerable, encoded-but-entangled, "
+        "and non-encoded. A **spectral decoder** maps the interventions back to amplitude "
+        "spectra, turning latent manipulations into physiologically interpretable "
+        "frequency signatures."
     )
 
     st.divider()
