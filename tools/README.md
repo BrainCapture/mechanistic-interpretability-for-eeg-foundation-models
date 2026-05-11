@@ -44,7 +44,7 @@ The pipeline is sequential — later steps depend on outputs from earlier steps.
 
 | Script | Produces | Paper |
 |---|---|---|
-| `finetune_sleepfm_v2_binary.py` | SleepFM binary-finetuned checkpoint | §3 (encoders) |
+| `finetune_sleepfm_v1_binary.py` | SleepFM binary-finetuned checkpoint (`sleepfm1.ckpt`) | §3 (encoders) |
 | `finetune_reve_binary.py` | REVE binary-finetuned checkpoint | §3 |
 | `finetune_labram_binary.py` | LaBraM binary-finetuned checkpoint | §3 |
 | `train_sae_layers.py` | TopK SAE on each encoder layer | §3.1, Fig 2 |
