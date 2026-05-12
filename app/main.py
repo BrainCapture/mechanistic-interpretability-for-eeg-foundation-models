@@ -1026,10 +1026,10 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
     )
 
     if not data["has_spectral_decoder"]:
-        st.warning(
-            "No spectral decoder checkpoint found for this run — spectral visualisations unavailable. "
-            "Train a spectral decoder first:  `uv run tools/train_spectral_decoder.py --encoder "
-            f"{data['encoder']} --tag ...`"
+        st.info(
+            "Spectral-decoder data isn't available for this encoder yet. "
+            "Pick a different model in the sidebar — the home-page **data-availability** "
+            "heatmap shows which (encoder, layer, expansion) cells are fully explorable."
         )
         return
 
@@ -1369,7 +1369,13 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
             _filter_msg = f" with label '{_label_filter}'" if _label_target is not None else ""
             st.caption(f"No activating windows found{_filter_msg} for this feature.")
     elif attn_cache is None:
-        st.info("No attention cache found — build one with `tools/build_attention_cache.py`.")
+        if _show_build_hints():
+            st.info("No attention cache found — build one with `tools/build_attention_cache.py`.")
+        else:
+            st.info(
+                "Attention cache isn't built for this config. Attention Explorer is "
+                "currently available for `sleepfm_finetuned_layer{0,1,2}`."
+            )
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Section 2 — Statistics
@@ -1571,8 +1577,29 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
 # Build-cache helper
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _show_build_hints() -> bool:
+    """True when running locally with a writable results/ tree.
+
+    The hosted Cloud Run app is stateless and can't actually build caches;
+    showing build buttons there would just confuse reviewers. We only show
+    the dev workflow when the results directory is writable.
+    """
+    try:
+        return os.access(str(ROOT / "results"), os.W_OK) \
+            and os.environ.get("MECHEEG_REVIEWER_MODE", "0") != "1"
+    except OSError:
+        return False
+
+
 def _build_app_cache_button(exp_name: str, key_suffix: str = "") -> None:
-    """Show the build command and a button that runs it."""
+    """Show the build command and a button that runs it (dev only)."""
+    if not _show_build_hints():
+        st.info(
+            "App-cache data for this config isn't built yet. Pick a config marked "
+            "green in the **data-availability heatmap** on the home page to "
+            "explore everything end-to-end."
+        )
+        return
     cmd = f"uv run tools/build_app_cache.py --experiment {exp_name}"
     st.code(cmd, language="bash")
     if st.button("Build app cache", key=f"build_cache_{exp_name}{key_suffix}"):
@@ -1616,8 +1643,18 @@ def page_tcav_explorer(
 
     if tcav_cache is None:
         if app_cache is None:
-            st.info("TCAV requires an app cache first.")
+            st.info(
+                "TCAV data isn't built for this config. Pick a config marked green "
+                "in the home-page **data-availability heatmap** for a ready-to-explore TCAV view."
+            )
             _build_app_cache_button(exp_name, "_tcav")
+        elif not _show_build_hints():
+            st.info(
+                "TCAV cache not yet built for **" + exp_name + "**. "
+                "The SAE and app cache are available; concept attribution will appear once the "
+                "TCAV build queue reaches this config (see the **data-availability heatmap** "
+                "on the home page)."
+            )
         else:
             tcav_cmd = f"uv run tools/run_tcav.py --experiment {exp_name}"
             st.info("No TCAV cache found for this experiment.")
@@ -3068,11 +3105,17 @@ def page_layer_explorer(folder_name: str) -> None:
     cache_path = umap_dir / folder_name / "umap_cache.pt"
 
     if not cache_path.exists():
-        st.info(
-            f"No layer UMAP cache found for **{folder_name}**.  Build it with:\n\n"
-            f"```\nuv run tools/build_layer_umap_cache.py --encoder {folder_name}\n```\n\n"
-            f"Cache will be saved to `results/layer_umap/{folder_name}/umap_cache.pt`."
-        )
+        if _show_build_hints():
+            st.info(
+                f"No layer UMAP cache found for **{folder_name}**.  Build it with:\n\n"
+                f"```\nuv run tools/build_layer_umap_cache.py --encoder {folder_name}\n```\n\n"
+                f"Cache will be saved to `results/layer_umap/{folder_name}/umap_cache.pt`."
+            )
+        else:
+            st.info(
+                "Layer UMAP isn't built for this encoder. Pick **SleepFM** in the sidebar "
+                "for the canonical animated layer trajectory used in §3 of the paper."
+            )
         return
 
     cache = load_layer_umap_cache(str(cache_path))
@@ -3217,10 +3260,16 @@ def page_attention_explorer(
     exp_name = f"{folder_name}_layer{layer}"
 
     if attn_cache is None:
-        st.info(
-            f"No attention cache found for **{exp_name}**. Build it with:\n\n"
-            f"```\nuv run tools/build_attention_cache.py --experiment {exp_name}\n```"
-        )
+        if _show_build_hints():
+            st.info(
+                f"No attention cache found for **{exp_name}**. Build it with:\n\n"
+                f"```\nuv run tools/build_attention_cache.py --experiment {exp_name}\n```"
+            )
+        else:
+            st.info(
+                "Attention cache isn't built for this config. Attention Explorer is a "
+                "supplementary tab; the canonical view is on `sleepfm_finetuned_layer{0,1,2}`."
+            )
         return
 
     n_features  = int(attn_cache["n_features"])
