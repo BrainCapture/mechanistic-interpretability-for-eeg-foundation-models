@@ -787,6 +787,9 @@ div[data-testid="stHorizontalBlock"] div[data-testid="stImage"] img {
         "tabs that require a missing cache show a clear build hint."
     )
 
+    # ── Data availability heatmaps ────────────────────────────────────────────
+    _render_data_availability()
+
     # ── Glossary ───────────────────────────────────────────────────────────────
     with st.expander("Glossary"):
         st.markdown(
@@ -844,6 +847,124 @@ EEG window  →  Encoder (frozen)  →  layer activations  →  TopK SAE  →  s
     # ── Model Cards ────────────────────────────────────────────────────────────
     with st.expander("Model Cards"):
         _model_cards_content()
+
+
+def _render_data_availability() -> None:
+    """Per-encoder layer × expansion heatmap showing artifact completeness."""
+    runs, exp_for, folder_for = discover_runs()
+    if not runs:
+        return
+
+    # Each cell evaluates four artifacts; the cell colour is the count present.
+    encoders = [
+        ("sleepfm", "SleepFM"),
+        ("labram",  "LaBraM"),
+        ("reve",    "REVE"),
+    ]
+    encoders = [(k, lbl) for (k, lbl) in encoders if k in runs]
+    if not encoders:
+        return
+
+    st.markdown("---")
+    st.subheader("Data availability — what's explorable")
+    st.caption(
+        "Per-encoder grid of `(layer × expansion)`. Each cell scores how many "
+        "of the four required artifacts are present for that config: "
+        "**SAE checkpoint · spectral decoder · app cache · TCAV cache**. "
+        "Green ⇒ every tab works for that config; red ⇒ only the bare SAE is on disk."
+    )
+
+    # Discrete 5-step colormap so 'all four present' looks decisively green.
+    # 0=red, 1=orange, 2=amber, 3=light green, 4=full green
+    colorscale = [
+        [0.00, "#c0392b"],
+        [0.25, "#e67e22"],
+        [0.50, "#f1c40f"],
+        [0.75, "#82c95e"],
+        [1.00, "#2e8b3d"],
+    ]
+    art_labels = ["SAE", "Spectral", "App cache", "TCAV"]
+
+    for encoder_key, encoder_label in encoders:
+        expansions = sorted(runs[encoder_key].keys())
+        all_layers = sorted({L for E in expansions for L in runs[encoder_key][E].keys()})
+        if not expansions or not all_layers:
+            continue
+
+        Z         = np.full((len(all_layers), len(expansions)), np.nan)
+        hover_txt = [["" for _ in expansions] for _ in all_layers]
+        for li, L in enumerate(all_layers):
+            for ei, E in enumerate(expansions):
+                ks = runs[encoder_key].get(E, {}).get(L, {})
+                if not ks:
+                    hover_txt[li][ei] = "(no SAE)"
+                    continue
+                k_val = min(ks.keys())
+                key   = (encoder_key, E, L, k_val)
+                folder = folder_for.get(key, "")
+                exp    = exp_for.get(key)
+                sae_ok       = ks[k_val].exists()
+                spectral_ok  = _spectral_decoder_path(folder) is not None
+                app_cache_ok = _app_cache_path(exp) is not None
+                tcav_ok      = _tcav_cache_path(exp) is not None
+                checks = [sae_ok, spectral_ok, app_cache_ok, tcav_ok]
+                Z[li, ei] = float(sum(checks))
+                hover_txt[li][ei] = (
+                    f"<b>L{L} · E={int(E)}</b><br>"
+                    + "<br>".join(
+                        f"{'✓' if c else '✗'} {lab}"
+                        for lab, c in zip(art_labels, checks)
+                    )
+                    + (f"<br><i>{exp}</i>" if exp else f"<br><i>{folder}</i>")
+                )
+
+        # Compact height that scales with the number of layers
+        n_layers = len(all_layers)
+        fig_h = max(140, 36 + n_layers * 22)
+
+        fig = go.Figure(go.Heatmap(
+            z=Z,
+            x=[f"×{int(E)}" for E in expansions],
+            y=[f"L{L}" for L in all_layers],
+            text=hover_txt, hovertemplate="%{text}<extra></extra>",
+            zmin=0, zmax=4, colorscale=colorscale,
+            xgap=2, ygap=2, showscale=False,
+        ))
+        fig.update_layout(
+            title=dict(text=f"<b>{encoder_label}</b>", x=0.0,
+                       font=dict(size=14, color="#333")),
+            xaxis=dict(side="bottom", tickfont=dict(color="#555")),
+            yaxis=dict(autorange="reversed", tickfont=dict(color="#555")),
+            height=fig_h, margin=dict(l=40, r=10, t=40, b=30),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig, use_container_width=True,
+                        config={"displayModeBar": False})
+
+    # Single shared legend underneath
+    st.markdown(
+        """
+<div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;
+            font-size:0.8rem; color:#555; margin-top:-0.4rem;">
+  <span><span style="display:inline-block;width:14px;height:14px;background:#2e8b3d;
+       border-radius:3px;vertical-align:middle;margin-right:4px;"></span>
+       all four artifacts</span>
+  <span><span style="display:inline-block;width:14px;height:14px;background:#82c95e;
+       border-radius:3px;vertical-align:middle;margin-right:4px;"></span>
+       three of four</span>
+  <span><span style="display:inline-block;width:14px;height:14px;background:#f1c40f;
+       border-radius:3px;vertical-align:middle;margin-right:4px;"></span>
+       two of four</span>
+  <span><span style="display:inline-block;width:14px;height:14px;background:#e67e22;
+       border-radius:3px;vertical-align:middle;margin-right:4px;"></span>
+       just SAE + one more</span>
+  <span><span style="display:inline-block;width:14px;height:14px;background:#c0392b;
+       border-radius:3px;vertical-align:middle;margin-right:4px;"></span>
+       SAE only</span>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
 
 def _model_cards_content() -> None:
