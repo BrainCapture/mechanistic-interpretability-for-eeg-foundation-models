@@ -97,7 +97,6 @@ META_LABELS: Dict[str, str] = {
 _META_CONFOUND_CHECK_FIELDS = {k for k in META_LABELS if k != "subject_id"}
 _META_QUAL_PALETTE = px.colors.qualitative.Plotly
 
-_FEAT_VIZ_DIR = ROOT / "results" / "feature_viz"
 _PATCH_SIZE   = 128      # samples per token (1 s @ 128 Hz for SleepFM)
 
 # Channels to show in the tokenizer cluster EEG waveform viewer (name → 0-based index)
@@ -948,36 +947,13 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
             pass
     has_tcav_scores = bool(tcav_scores_per_feature)
 
-    # Load prototype data early so selectivity can be used as a sort key
-    _proto_run_name = _latest_proto_run(folder_name or "", layer) if folder_name else None
-    _proto_data     = _load_prototypes(_proto_run_name) if _proto_run_name else None
-    has_proto       = _proto_data is not None
-    sel_scores:    dict[int, float] = {}
-    joint_scores:  dict[int, float] = {}
+    # Abnormal ratio from attention cache (independent of feature visualisations)
     abnorm_ratios: dict[int, float] = {}
-    real_example_idxs: set[int] = set()
-
-    # Abnormal ratio from attention cache (independent of proto)
     if attn_cache is not None and "top_window_labels" in attn_cache:
         _twl = attn_cache["top_window_labels"]  # (n_features, K)
         for _fi in range(int(attn_cache["n_features"])):
             _lbls = _twl[_fi].float().numpy()
             abnorm_ratios[_fi] = float(np.mean(_lbls > 0.5))
-    if has_proto:
-        _fi_list  = _proto_data["feature_indices"].tolist()
-        _sel_hist = _proto_data["selectivity_hists"]
-        for _ii, _fi in enumerate(_fi_list):
-            sel_scores[_fi] = float(_sel_hist[_ii, -1])
-        _tj = _proto_data.get("top_joint_scores", None)
-        if _tj is not None:
-            for _ii, _fi in enumerate(_fi_list):
-                joint_scores[_fi] = float(_tj[_ii])
-        _ex = _proto_data.get("example_patches", None)
-        if _ex is not None:
-            # shape (N, n_examples, C, P) — has real examples if any patch is non-zero
-            for _ii, _fi in enumerate(_fi_list):
-                if _ex[_ii].any():
-                    real_example_idxs.add(int(_fi))
 
     # Load metadata enrichment early for sorting
     _all_meta_enr = (app_cache or {}).get("feature_meta_enrichment", [])
@@ -1008,17 +984,12 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
                              "Label correlation ↓", "Label correlation ↑"]
         if has_tcav_scores:
             sort_options.append("TCAV abnormal ↓")
-        if has_proto:
-            sort_options.append("Selectivity ↓")
-            if joint_scores:
-                sort_options.append("Attention score ↓")
         if abnorm_ratios:
             sort_options.append("Abnormal ratio ↓")
         if _all_meta_enr:
             sort_options += ["Age enrichment ↓", "Sex enrichment ↓"]
         _default_sort = (
-            "Selectivity ↓" if has_proto
-            else "TCAV abnormal ↓" if has_tcav_scores
+            "TCAV abnormal ↓" if has_tcav_scores
             else "Fire rate ↓" if has_cache
             else "Feature index"
         )
@@ -1048,8 +1019,6 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
             "cluster":     _expl(i, "cluster", default=-1),
             "mean_act":      _stat(i, "mean_activation"),
             "max_act":       _stat(i, "max_activation"),
-            "selectivity":   sel_scores.get(i, float("nan")),
-            "joint_score":   joint_scores.get(i, float("nan")),
             "abnorm_ratio":  abnorm_ratios.get(i, float("nan")),
             "tcav_abnormal": tcav_scores_per_feature.get(i, float("nan")),
             "age_enr":       _meta_enr_max["age_group"].get(i, float("nan")),
@@ -1070,8 +1039,6 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
         "Label correlation ↓": lambda r: r["corr"] if not np.isnan(r["corr"]) else 0,
         "Label correlation ↑": lambda r: -r["corr"] if not np.isnan(r["corr"]) else 0,
         "TCAV abnormal ↓":     lambda r: -r["tcav_abnormal"] if not np.isnan(r["tcav_abnormal"]) else 0,
-        "Selectivity ↓":       lambda r: -r["selectivity"] if not np.isnan(r["selectivity"]) else 0,
-        "Attention score ↓":   lambda r: -r["joint_score"] if not np.isnan(r["joint_score"]) else 0,
         "Abnormal ratio ↓":    lambda r: -r["abnorm_ratio"] if not np.isnan(r["abnorm_ratio"]) else 0,
         "Age enrichment ↓":    lambda r: -r["age_enr"] if not np.isnan(r["age_enr"]) else 0,
         "Sex enrichment ↓":    lambda r: -r["sex_enr"] if not np.isnan(r["sex_enr"]) else 0,
@@ -1082,13 +1049,9 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
 
     # ── Feature selector ──────────────────────────────────────────────
     def _feat_option(r: dict) -> str:
-        if sort_by == "Attention score ↓" and not np.isnan(r["joint_score"]):
-            metric = f"attn={r['joint_score']:.4f}"
-        elif sort_by == "Selectivity ↓" and not np.isnan(r["selectivity"]):
-            metric = f"sel={r['selectivity']:.0%}"
-        elif sort_by == "TCAV abnormal ↓" and not np.isnan(r["tcav_abnormal"]):
+        if sort_by == "TCAV abnormal ↓" and not np.isnan(r["tcav_abnormal"]):
             metric = f"tcav={r['tcav_abnormal']:.0%}"
-        elif sort_by in ("Fire rate ↓",) and not np.isnan(r["fire_rate"]):
+        elif sort_by == "Fire rate ↓" and not np.isnan(r["fire_rate"]):
             metric = f"fr={r['fire_rate']:.1f}%"
         elif sort_by == "Mean activation ↓" and not np.isnan(r["mean_act"]):
             metric = f"mean={r['mean_act']:.3f}"
@@ -1102,10 +1065,9 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
             metric = f"sex×{r['sex_enr']:.2f}"
         else:
             metric = r["band"]
-        star = " ★" if r["idx"] in real_example_idxs else ""
-        abn   = r["abnorm_ratio"]
+        abn = r["abnorm_ratio"]
         abn_badge = f"  abn={abn:.0%}" if not np.isnan(abn) else ""
-        return f"F{r['idx']}{star}  [{metric}]{abn_badge}"
+        return f"F{r['idx']}  [{metric}]{abn_badge}"
 
     feat_options = [_feat_option(r) for r in rows]
     if not feat_options:
@@ -1117,14 +1079,12 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
     # ── Feature landscape overview ────────────────────────────────────
     with st.expander("Feature landscape — all features overview"):
         _has_xy = has_cache and any(not np.isnan(r["fire_rate"]) for r in rows)
-        if not _has_xy and not has_proto:
-            st.info("Overview requires app cache or prototype data.")
+        if not _has_xy:
+            st.info("Overview requires an app cache for this experiment.")
         else:
             _ov_x_opts = []
             if has_cache:
                 _ov_x_opts += ["Fire rate (%)", "Label correlation (r)"]
-            if has_proto:
-                _ov_x_opts.append("Selectivity")
             _ov_y_opts = list(_ov_x_opts)  # same choices for both axes
 
             _ov_col1, _ov_col2 = st.columns(2)
@@ -1137,7 +1097,6 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
             def _ov_val(r: dict, metric: str) -> float:
                 if metric == "Fire rate (%)":      return r["fire_rate"]
                 if metric == "Label correlation (r)": return r["corr"]
-                if metric == "Selectivity":        return r["selectivity"]
                 return float("nan")
 
             _xs = [_ov_val(r, _x_choice) for r in rows]
@@ -1485,151 +1444,6 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
             "p": "p-value", "band": "Dominant band", "description": "Description",
         })
         st.dataframe(df.drop(columns=["cluster"]), use_container_width=True, height=400)
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # Section 3 — Prototype
-    # ═══════════════════════════════════════════════════════════════════════════
-    st.markdown("---")
-    st.subheader("Prototype")
-
-    if _proto_run_name is None:
-        st.info(
-            "No prototype runs found for this model/layer in `results/feature_viz/`. "
-            "Run `tools/feature_maximization.py --experiment <name>` first."
-        )
-    else:
-        st.caption(f"Run: `{_proto_run_name}`")
-        proto = _proto_data
-        feat_indices_list = proto["feature_indices"].tolist()
-
-        if chosen_idx not in feat_indices_list:
-            st.info(f"Feature {chosen_idx} has no prototype in run `{_proto_run_name}`.")
-        else:
-            sel_idx   = feat_indices_list.index(chosen_idx)
-            _has_slim = "peak_patches" in proto
-            feat_act_h = proto["feat_act_hists"]
-            sel_h      = proto["selectivity_hists"]
-            final_zs   = proto["final_zs"]
-            peak_tokens = proto["peak_tokens"].tolist()
-            fs          = int(proto["fs"])
-            emp_rms     = proto.get("empirical_spatial_rms", None)
-
-            fi       = feat_indices_list[sel_idx]
-            peak_tok = peak_tokens[sel_idx]
-            fa_hist  = feat_act_h[sel_idx]
-            s_hist   = sel_h[sel_idx]
-            fz       = final_zs[sel_idx]
-
-            if _has_slim:
-                peak_patch = proto["peak_patches"][sel_idx].astype(np.float32)
-            else:
-                sig        = proto["signals"][sel_idx]
-                peak_patch = sig[:, peak_tok * _PATCH_SIZE:(peak_tok + 1) * _PATCH_SIZE]
-
-            C_p       = peak_patch.shape[0]
-            P_samples = peak_patch.shape[-1]
-            ch_labels = _CHANNEL_NAMES[:C_p]
-            final_sel = float(s_hist[-1])
-            sel_pct   = final_sel * 100
-            t_s       = np.arange(P_samples) / fs
-            spacing   = 2.2
-
-            proto_crop = _bandpass(peak_patch, fs=fs)
-            proto_norm = _eeg_normalize(proto_crop)
-            fig_proto  = go.Figure()
-            for c in range(C_p):
-                y_off = (C_p - 1 - c) * spacing
-                fig_proto.add_trace(go.Scatter(
-                    x=t_s.tolist(), y=(proto_norm[c] + y_off).tolist(),
-                    mode="lines", line=dict(width=1.0, color="salmon"),
-                    showlegend=False,
-                    hovertemplate=f"<b>{ch_labels[c]}</b><br>t=%{{x:.3f}} s<extra></extra>",
-                ))
-            fig_proto.update_layout(
-                title="Gradient-ascent prototype — peak token (1 s)",
-                xaxis_title="Time (s)",
-                yaxis=dict(tickmode="array",
-                           tickvals=[(C_p - 1 - c) * spacing for c in range(C_p)],
-                           ticktext=ch_labels, tickfont=dict(size=11)),
-                height=max(600, C_p * 22),
-                margin=dict(l=60, r=10, t=40, b=40),
-            )
-            st.plotly_chart(fig_proto, use_container_width=True)
-
-            with st.expander(f"Feature purity — {sel_pct:.1f}%"):
-                k_floor = 1.0 / 8 * 100
-                st.info(
-                    f"**Feature purity: {sel_pct:.1f}%** — "
-                    f"at the peak token, {sel_pct:.1f}% of all SAE activation energy is on this feature "
-                    f"(chance = {k_floor:.1f}%, max = 100%)."
-                )
-                col3, col4 = st.columns(2)
-                with col3:
-                    if emp_rms is not None and emp_rms.shape[0] > sel_idx:
-                        rms_vals  = emp_rms[sel_idx, :C_p]
-                        title_sp  = "Spatial RMS — real data (top-100 patches)"
-                        bar_color = "steelblue"
-                    else:
-                        rms_vals  = np.sqrt((peak_patch[:C_p] ** 2).mean(axis=-1))
-                        title_sp  = "Spatial RMS — gradient-ascent peak token"
-                        bar_color = "salmon"
-                    fig_sp = go.Figure(go.Bar(
-                        x=rms_vals.tolist(), y=ch_labels,
-                        orientation="h", marker_color=bar_color,
-                    ))
-                    fig_sp.update_layout(
-                        title=title_sp, xaxis_title="RMS amplitude",
-                        yaxis=dict(autorange="reversed", tickfont=dict(size=11)),
-                        height=max(350, C_p * 16), margin=dict(l=60, r=10, t=40, b=40),
-                    )
-                    st.plotly_chart(fig_sp, use_container_width=True)
-                with col4:
-                    top8_idx  = np.argsort(fz)[::-1][:8]
-                    top8_vals = fz[top8_idx]
-                    total_z   = top8_vals.sum() + 1e-9
-                    fractions = top8_vals / total_z
-                    colors    = ["crimson" if idx == fi else "#5B9BD5" for idx in top8_idx]
-                    fig_sel = go.Figure(go.Bar(
-                        x=[f"f{idx}" for idx in top8_idx], y=fractions.tolist(),
-                        marker_color=colors,
-                        hovertext=[f"Feature {idx}<br>z={v:.3f}<br>{f:.1%} of top-k total"
-                                   for idx, v, f in zip(top8_idx, top8_vals, fractions)],
-                        hoverinfo="text",
-                    ))
-                    fig_sel.add_hline(y=1.0 / 8, line_dash="dot", line_color="gray", opacity=0.6,
-                                     annotation_text="uniform (1/k)", annotation_position="top right")
-                    fig_sel.update_layout(
-                        title=f"Feature purity — {final_sel:.1%} of total SAE activation<br>"
-                              f"<sup>Red bar = target feature.</sup>",
-                        yaxis=dict(title="Fraction of total z", tickformat=".0%", range=[0, 1.05]),
-                        height=320, margin=dict(l=50, r=20, t=60, b=40),
-                    )
-                    st.plotly_chart(fig_sel, use_container_width=True)
-
-            with st.expander("Optimisation dynamics"):
-                steps = list(range(1, len(fa_hist) + 1))
-                fig_dyn = go.Figure()
-                fig_dyn.add_trace(go.Scatter(x=steps, y=fa_hist.tolist(),
-                    name="Feature activation (post-TopK)",
-                    line=dict(color="#2196F3", width=1.5), yaxis="y1"))
-                fig_dyn.add_trace(go.Scatter(x=steps, y=s_hist.tolist(),
-                    name="Feature purity (z_i / Σz)",
-                    line=dict(color="#FF9800", width=1.5, dash="dash"), yaxis="y2"))
-                fig_dyn.add_hline(y=1.0 / 8, line_dash="dot", line_color="#FF9800", opacity=0.4,
-                                  annotation_text="1/k floor", annotation_position="bottom right",
-                                  yref="y2")
-                fig_dyn.update_layout(
-                    title="Gradient-ascent optimisation dynamics", xaxis_title="Step",
-                    yaxis=dict(title=dict(text="Feature activation", font=dict(color="#2196F3")),
-                               tickfont=dict(color="#2196F3")),
-                    yaxis2=dict(title=dict(text="Feature purity", font=dict(color="#FF9800")),
-                                tickfont=dict(color="#FF9800"),
-                                overlaying="y", side="right", range=[0, 1.05]),
-                    legend=dict(x=0.01, y=0.99),
-                    height=300, margin=dict(l=60, r=60, t=40, b=40),
-                )
-                st.plotly_chart(fig_dyn, use_container_width=True)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
@@ -3249,30 +3063,6 @@ def page_layer_explorer(folder_name: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point
 # ─────────────────────────────────────────────────────────────────────────────
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Feature Prototypes page
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _latest_proto_run(folder_name: str, layer: int) -> str | None:
-    """Return the latest prototype run for this model+layer, or None."""
-    if not _FEAT_VIZ_DIR.exists():
-        return None
-    prefix = f"{folder_name}_layer{layer}"
-    candidates = sorted(
-        d.name for d in _FEAT_VIZ_DIR.iterdir()
-        if d.is_dir() and (d / "prototypes.npz").exists()
-        and d.name.startswith(prefix)
-    )
-    return candidates[-1] if candidates else None
-
-
-@st.cache_data
-def _load_prototypes(run_name: str) -> dict:
-    path = _FEAT_VIZ_DIR / run_name / "prototypes.npz"
-    data = np.load(path, allow_pickle=True)
-    return {k: data[k] for k in data.files}
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Page — Attention Explorer
