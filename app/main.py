@@ -17,6 +17,7 @@ results/experiments/.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -578,10 +579,9 @@ def sidebar():
         "Feature Explorer",
         "Layer Explorer",
         "TCAV Explorer",
-        "Demographics Explorer",
         "Concept Steering",
+        "Taxonomy & Steering",
         "Attention Explorer",
-        "SAE Analysis",
     ]
     page = st.sidebar.radio(
         "Page",
@@ -658,10 +658,9 @@ def page_home() -> None:
     tabs_map = [
         ("Feature Explorer",      "§3.1",       "Per-feature spectral signatures via the spectral decoder"),
         ("Layer Explorer",        "§3",         "Animated joint UMAP showing token trajectories across encoder layers"),
-        ("SAE Analysis",          "§3.2 · Fig 2 + §3.3 · Fig 3", "Layer-sweep faithfulness and the three-way feature taxonomy"),
         ("TCAV Explorer",         "§4 · Fig 4", "Concept attribution via Testing with Concept Activation Vectors"),
-        ("Demographics Explorer", "§4",         "Feature firing-rate enrichment across demographic / clinical groups"),
-        ("Concept Steering",      "§5–6 · Figs 4 / 5 / 6", "Clamping concept-aligned features to the target centroid"),
+        ("Concept Steering",      "§5–6 · Figs 4 / 5 / 6", "Clamping concept-aligned features to the target centroid (single config, hands-on)"),
+        ("Taxonomy & Steering",   "§3.2 · Fig 2 + §3.3 · Fig 3 + §5–6 · Figs 4–6", "Paper figures + interactive Fig 5 (any encoder × layer × concept)"),
         ("Attention Explorer",    "supplementary", "Encoder self-attention alongside SAE features (not in paper)"),
     ]
 
@@ -740,96 +739,43 @@ Frozen Encoder  →  SAE  →  spectral decoder  →  App Cache  →  Streamlit 
 
 
 def _model_cards_content() -> None:
-    import pandas as pd
-
     st.title("Model Cards")
-
-    # ── SleepFM family comparison table ───────────────────────────────────────
-    st.subheader("SleepFM family")
     st.caption(
-        "All SleepFM models use the SetTransformer architecture (Thapa et al., 2026) "
-        "with embed_dim=128 and 128 Hz input. "
-        "v1.1 has 3 transformer layers; v2 models have 6. "
-        "v2 models adopt a CNN tokenizer and AdamW optimisation. "
-        "v2.6 and v2.7 use 1-second patches (vs. 5-second for v2.0–v2.5), "
-        "giving finer temporal resolution at the cost of shorter per-token context."
+        "The paper studies three EEG foundation encoders. All are binary-finetuned "
+        "on the BrainCapture normal/abnormal classification task before SAE training."
     )
 
-    sleepfm_keys = [k for k, c in MODEL_CARDS.items() if c.get("family") == "SleepFM"]
-    table_rows = []
-    for key in sleepfm_keys:
-        card  = MODEL_CARDS[key]
-        specs = card["specs"]
-        patch_hz  = specs.get("patch_size", specs["sample_rate_hz"])
-        patch_sec = f"{patch_hz // specs['sample_rate_hz']} s"
-        table_rows.append({
-            "Model":          card["display_name"],
-            "Layers":         specs["layers"],
-            "Tokenizer":      specs["tokenizer"],
-            "Patch":          patch_sec,
-            "Pos. emb.":      "✓" if specs["position_emb"] else "—",
-            "Reconstruction": specs["reconstruction"],
-            "Optimizer":      specs["optimizer"],
-        })
+    # Paper encoders: SleepFM (v1.1, 3 layers, the original SetTransformer),
+    # LaBraM-Base (12 layers), REVE (22 layers).
+    paper_models = [
+        ("sleepfm", "SleepFM"),
+        ("labram",  "LaBraM"),
+        ("reve",    "REVE"),
+    ]
 
-    df = pd.DataFrame(table_rows)
-    st.dataframe(
-        df,
-        hide_index=True,
-        use_container_width=True,
-        column_config={
-            "Model":          st.column_config.TextColumn(width="medium"),
-            "Layers":         st.column_config.NumberColumn(width="small"),
-            "Tokenizer":      st.column_config.TextColumn(width="small"),
-            "Patch":          st.column_config.TextColumn("Patch size", width="small"),
-            "Pos. emb.":      st.column_config.TextColumn("Pos. emb.", width="small"),
-            "Reconstruction": st.column_config.TextColumn(width="large"),
-            "Optimizer":      st.column_config.TextColumn(width="small"),
-        },
-    )
-
-    # ── Individual SleepFM cards ───────────────────────────────────────────────
-    for key in sleepfm_keys:
+    for key, header in paper_models:
         card  = MODEL_CARDS[key]
         specs = card["specs"]
 
         st.markdown("---")
-        st.markdown(f"### {card['display_name']}")
+        st.markdown(f"### {header}")
 
-        patch_hz    = specs.get("patch_size", specs["sample_rate_hz"])
-        patch_label = f"{patch_hz // specs['sample_rate_hz']} s"
-        c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
-        c1.metric("Embed dim",   specs["embed_dim"])
-        c2.metric("Layers",      specs["layers"])
-        c3.metric("Tokenizer",   specs["tokenizer"])
-        c4.metric("Patch size",  patch_label)
-        c5.metric("Sample rate", f"{specs['sample_rate_hz']} Hz")
-        c6.metric("Pos. emb.",   "Yes" if specs["position_emb"] else "No")
-        c7.metric("Optimizer",   specs["optimizer"])
+        has_patch = "patch_size" in specs
+        n_cols = 7 if has_patch else 6
+        cols = st.columns(n_cols)
+        cols[0].metric("Embed dim",   specs["embed_dim"])
+        cols[1].metric("Layers",      specs["layers"])
+        cols[2].metric("Tokenizer",   specs["tokenizer"])
+        idx = 3
+        if has_patch:
+            patch_label = f"{specs['patch_size'] // specs['sample_rate_hz']} s"
+            cols[idx].metric("Patch size", patch_label)
+            idx += 1
+        cols[idx].metric("Sample rate", f"{specs['sample_rate_hz']} Hz"); idx += 1
+        cols[idx].metric("Pos. emb.",   "Yes" if specs["position_emb"] else "No"); idx += 1
+        cols[idx].metric("Optimizer",   specs["optimizer"])
 
         st.markdown(f"**Reconstruction:** {specs['reconstruction']}")
-        st.markdown(f"**Pretraining:** {card['pretraining']}")
-        st.markdown(f"**{card['notes_label']}:** {card['notes']}")
-
-    # ── Other encoders ────────────────────────────────────────────────────────
-    other_keys = [k for k, c in MODEL_CARDS.items() if c.get("family") != "SleepFM"]
-    if other_keys:
-        st.markdown("---")
-        st.subheader("Other encoders")
-
-    for key in other_keys:
-        card  = MODEL_CARDS[key]
-        specs = card["specs"]
-
-        st.markdown(f"### {card['display_name']}")
-
-        c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("Embed dim",   specs["embed_dim"])
-        c2.metric("Layers",      specs["layers"])
-        c3.metric("Tokenizer",   specs["tokenizer"])
-        c4.metric("Sample rate", f"{specs['sample_rate_hz']} Hz")
-        c5.metric("Pos. emb.",   "Yes" if specs["position_emb"] else "No")
-
         st.markdown(f"**Pretraining:** {card['pretraining']}")
         st.markdown(f"**{card['notes_label']}:** {card['notes']}")
 
@@ -2724,304 +2670,344 @@ def _render_tokenizer_clusters(cache: dict, k: int) -> None:
         st.divider()
 
 
-def _render_sae_sweep_content(run_data: dict, folder_name: str) -> None:
+# ─────────────────────────────────────────────────────────────────────────────
+# Taxonomy & Steering — paper figures (with one interactive panel)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PAPER_FIG_DIR = ROOT / "tools" / "paper_figures"
+
+
+def _show_paper_image(rel_dir: str, caption: str) -> None:
+    p = _PAPER_FIG_DIR / rel_dir / "figure.png"
+    if p.exists():
+        st.image(str(p), use_container_width=True, caption=caption)
+    else:
+        st.info(f"`{p.relative_to(ROOT)}` not found.")
+
+
+@st.cache_data(show_spinner="Loading steering-curve data …")
+def _load_steering_curves_data() -> Dict[Tuple[str, str], dict]:
+    """Load Figure 5 data — returns {(concept, experiment) → entry-dict}."""
+    p = _PAPER_FIG_DIR / "Figure 5" / "data.npz"
+    if not p.exists():
+        return {}
+    raw = np.load(p, allow_pickle=True)
+    out: Dict[Tuple[str, str], dict] = {}
+    for k in raw.files:
+        e = json.loads(str(raw[k]))
+        out[(e["concept"], e["experiment"])] = e
+    return out
+
+
+_EXP_RE_SLEEPFM = re.compile(r"^sleepfm_finetuned(?:_exp(\d+))?_layer(\d+)$")
+_EXP_RE_LABRAM  = re.compile(r"^labram_layer(\d+)(?:_exp(\d+))?$")
+_EXP_RE_REVE    = re.compile(r"^reve_qjbe08(?:_exp(\d+))?_layer(\d+)$")
+
+
+def _parse_experiment(exp: str) -> Optional[Tuple[str, int, int]]:
+    """Parse experiment name into (family, expansion, layer_0idx)."""
+    if exp.endswith("_multi"):
+        return None
+    m = _EXP_RE_SLEEPFM.match(exp)
+    if m:
+        E = int(m.group(1)) if m.group(1) else 1
+        return ("SleepFM", E, int(m.group(2)))
+    m = _EXP_RE_LABRAM.match(exp)
+    if m:
+        E = int(m.group(2)) if m.group(2) else 1
+        return ("LaBraM", E, int(m.group(1)))
+    m = _EXP_RE_REVE.match(exp)
+    if m:
+        E = int(m.group(1)) if m.group(1) else 1
+        return ("REVE", E, int(m.group(2)))
+    return None
+
+
+@st.cache_data(show_spinner="Loading taxonomy data …")
+def _load_taxonomy_data() -> Dict[str, dict]:
+    """Load Figure 3 data — {exp_name: {separable, entangled, dead}}."""
+    p = _PAPER_FIG_DIR / "Figure 3" / "data.json"
+    if not p.exists():
+        return {}
+    return json.loads(p.read_text())
+
+
+_TAXONOMY_ENCODERS = [
+    {"name": "SleepFM", "layers": [0, 1, 2],         "exp_for":
+        lambda L, E: f"sleepfm_finetuned_layer{L}" if E == 1 else f"sleepfm_finetuned_exp{E}_layer{L}"},
+    {"name": "LaBraM",  "layers": list(range(12)),   "exp_for":
+        lambda L, E: f"labram_layer{L}" if E == 1 else f"labram_layer{L}_exp{E}"},
+    {"name": "REVE",    "layers": list(range(22)),   "exp_for":
+        lambda L, E: f"reve_qjbe08_layer{L}" if E == 1 else f"reve_qjbe08_exp{E}_layer{L}"},
+]
+_TAXONOMY_EXPANSIONS = [1, 2, 4, 8, 16, 32, 64]
+_TAXONOMY_METRICS = {
+    "Separable": ("separable", "Greens", "Fraction of concept-enriched SAE features that respond to one and only one concept."),
+    "Entangled": ("entangled", "Oranges", "Fraction sharing one neural primitive across multiple labels (e.g. age + pathology via δ/θ)."),
+    "Dead":      ("dead",      "Reds",    "Fraction of SAE features that never fire — capacity-limited."),
+}
+
+
+def _render_taxonomy_subtab() -> None:
     st.markdown(
-        "Grid search over SAE **expansion factor** and **k** (sparsity) to select hyperparameters. "
-        "Each cell is one trained SAE evaluated on the validation set."
+        "**Figure 3 (§3.3)** — fraction of concept-enriched SAE features in each of three taxonomy classes "
+        "(Separable / Entangled / Dead), across layers × expansion factors, per encoder. "
+        "Hover any cell to see exact values. Hatched cells = no SAE trained at that (ℓ, E)."
     )
 
-    # ── Discover available sweep files ────────────────────────────────────────
-    sae_root = Path("results/sae")
-    encoder_raw = run_data.get("encoder", "sleepfm")
-    is_reve = encoder_raw.startswith("reve")
-
-    if is_reve:
-        layer_dirs = sorted((sae_root / "reve").glob("layer_*"), key=lambda p: int(p.name.split("_")[1]))
-        layer_nums = [int(p.name.split("_")[1]) for p in layer_dirs]
-        if not layer_nums:
-            st.warning("No REVE sweep results found in results/sae/reve/.")
-            return
-        chosen_layer = run_data.get("layer", layer_nums[-1])
-        layer_choice = st.selectbox(
-            "Layer", layer_nums,
-            index=layer_nums.index(chosen_layer) if chosen_layer in layer_nums else len(layer_nums) - 1,
-        )
-        sweep_path = sae_root / "reve" / f"layer_{layer_choice}" / "sweep_results.json"
-    else:
-        sweep_path = sae_root / "sleepfm" / "sweep_results.json"
-
-    if not sweep_path.exists():
-        st.warning(f"Sweep results not found: `{sweep_path}`")
+    taxonomy = _load_taxonomy_data()
+    if not taxonomy:
+        st.info("`tools/paper_figures/Figure 3/data.json` not found.")
         return
 
-    import json as _json
-    rows = _json.loads(sweep_path.read_text())
-
-    expansions = sorted(set(r["expansion"] for r in rows))
-    ks         = sorted(set(r["k"] for r in rows))
-
-    # Build 2-D grids: rows = expansion, cols = k
-    r2_grid   = np.full((len(expansions), len(ks)), np.nan)
-    dead_grid = np.full((len(expansions), len(ks)), np.nan)
-    for r in rows:
-        ei = expansions.index(r["expansion"])
-        ki = ks.index(r["k"])
-        r2_grid[ei, ki]   = r["r2"]
-        dead_grid[ei, ki] = r["dead_frac"]
-
-    # Chosen config: for REVE use the checkpoint for the sweep's layer_choice,
-    # which may differ from the sidebar-selected layer.
-    if is_reve:
-        _feat_dir = Path("results/features") / folder_name
-        _layer_ckpts = sorted(_feat_dir.glob(f"sae_*_layer{layer_choice}.pt"))
-        if _layer_ckpts:
-            try:
-                _m = torch.load(str(_layer_ckpts[-1]), map_location="cpu", weights_only=False)
-                chosen_exp = _m.get("expansion")
-                chosen_k   = _m.get("k")
-            except Exception:
-                chosen_exp = run_data.get("expansion")
-                chosen_k   = run_data.get("k")
-        else:
-            chosen_exp, chosen_k = None, None
-    else:
-        chosen_exp = run_data.get("expansion")
-        chosen_k   = run_data.get("k")
-
-    # ── Heatmaps ──────────────────────────────────────────────────────────────
-    # Build custom hover text: "expansion=X  k=Y  value=Z  ★ chosen"
-    def _hover_grid(grid, label, fmt):
-        texts = []
-        for ei, exp in enumerate(expansions):
-            row = []
-            for ki, k in enumerate(ks):
-                val = grid[ei, ki]
-                chosen_mark = "  ★ chosen" if (exp == chosen_exp and k == chosen_k) else ""
-                row.append(f"Expansion: {exp}<br>k: {k}<br>{label}: " + fmt.format(val) + chosen_mark)
-            texts.append(row)
-        return texts
-
-    # Mark chosen cell with a star annotation only (no per-cell value text)
-    # Use 0-based integer indices — string labels like '8' are misread as numeric
-    # positions by Plotly (putting the star on position 8 = the 9th column).
-    chosen_annotation = []
-    if chosen_exp is not None and chosen_k is not None and chosen_exp in expansions and chosen_k in ks:
-        chosen_annotation = [dict(
-            x=ks.index(chosen_k), y=str(chosen_exp), text="★",
-            showarrow=False, font=dict(size=16, color="white"),
-        )]
-
-    def _heatmap(grid, title, colorscale, zmin, zmax, label, fmt):
-        fig = go.Figure(go.Heatmap(
-            z=grid.tolist(),
-            x=[str(k) for k in ks],
-            y=[str(e) for e in expansions],
-            colorscale=colorscale,
-            zmin=zmin, zmax=zmax,
-            colorbar=dict(thickness=12, len=0.75, y=0.5),
-            hovertemplate="Expansion: %{y}<br>k: %{x}<br>" + label + ": %{z:.4f}<extra></extra>",
-        ))
-        fig.update_layout(
-            annotations=chosen_annotation,
-            title=dict(text=title, font=dict(size=14)),
-            xaxis=dict(title="k (sparsity)", type="category",
-                       categoryorder="array", categoryarray=[str(k) for k in ks]),
-            yaxis_title="Expansion factor",
-            height=280, margin=dict(t=40, b=50, l=70, r=10),
-            paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-            font=dict(color="#fafafa"),
-        )
-        return fig
-
-    st.markdown(
-        "**R²** measures how well the SAE reconstructs the encoder activations — higher is better. "
-        "**Dead neuron fraction** is the share of SAE features that never activate — lower is better. "
-        "The ★ marks the configuration used by the currently selected experiment."
+    metric_name = st.radio(
+        "Metric",
+        list(_TAXONOMY_METRICS.keys()),
+        horizontal=True,
+        key="taxonomy_metric",
+        help=" · ".join(f"**{k}** — {v[2]}" for k, v in _TAXONOMY_METRICS.items()),
     )
-    col_h1, col_h2 = st.columns(2)
-    with col_h1:
-        st.plotly_chart(
-            _heatmap(r2_grid, "R² (reconstruction)", "RdYlGn",
-                     0.0, 1.0, "R²", "{:.4f}"),
-            use_container_width=True,
-        )
-    with col_h2:
-        st.plotly_chart(
-            _heatmap(dead_grid, "Dead neuron fraction", "RdYlGn_r",
-                     0.0, float(np.nanmax(dead_grid)), "Dead fraction", "{:.4f}"),
-            use_container_width=True,
-        )
+    field, cmap, blurb = _TAXONOMY_METRICS[metric_name]
+    st.caption(blurb)
 
-    # ── Pareto scatter: R² vs dead_frac ───────────────────────────────────────
-    st.markdown(
-        "**Pareto frontier:** each point is one (expansion, k) combination. "
-        "The ideal region is the **top-left** corner — high R² with few dead neurons. "
-        "Points are labelled by k; series are coloured by expansion factor."
-    )
-    focus_high_k = st.toggle("Focus on k ≥ 8 (hide low-k outliers)", value=True)
-    palette_exp = ["#4477aa", "#66ccee", "#228833", "#ee6677"]
-    fig_p = go.Figure()
-    for ei, exp in enumerate(expansions):
-        xs, ys, hovers, is_chosen_list = [], [], [], []
-        for ki, k in enumerate(ks):
-            xs.append(dead_grid[ei, ki])
-            ys.append(r2_grid[ei, ki])
-            chosen_mark = "  ★ chosen" if (exp == chosen_exp and k == chosen_k) else ""
-            hovers.append(
-                f"Expansion: {exp}<br>k: {k}<br>"
-                f"R²: {r2_grid[ei,ki]:.4f}<br>Dead fraction: {dead_grid[ei,ki]:.4f}"
-                + chosen_mark
+    n_enc = len(_TAXONOMY_ENCODERS)
+    cols = st.columns(n_enc, gap="medium")
+    for col, cfg in zip(cols, _TAXONOMY_ENCODERS):
+        with col:
+            layers = cfg["layers"]
+            Es     = _TAXONOMY_EXPANSIONS
+            mat    = np.full((len(layers), len(Es)), np.nan)
+            for i, L in enumerate(layers):
+                for j, E in enumerate(Es):
+                    entry = taxonomy.get(cfg["exp_for"](L, E))
+                    if entry is not None:
+                        mat[i, j] = entry.get(field, np.nan) * 100.0
+            hover_text = [[f"L{L} · E={E}<br>{metric_name}: {mat[i,j]:.1f}%"
+                           if not np.isnan(mat[i,j]) else f"L{L} · E={E}<br>no SAE trained"
+                           for j, E in enumerate(Es)] for i, L in enumerate(layers)]
+            fig = go.Figure(data=go.Heatmap(
+                z=mat,
+                x=[f"{E}×" for E in Es],
+                y=[f"L{L}" for L in layers],
+                colorscale=cmap,
+                zmin=0, zmax=100,
+                hoverinfo="text",
+                text=hover_text,
+                colorbar=dict(title=dict(text="%", side="right"), tickformat=".0f", thickness=10),
+            ))
+            fig.update_layout(
+                title=f"<b>{cfg['name']}</b>",
+                height=max(220, 32 * len(layers) + 110),
+                margin=dict(l=40, r=10, t=40, b=40),
+                xaxis_title="Expansion",
+                yaxis_title="Layer",
+                yaxis=dict(autorange="reversed"),
             )
-            is_chosen_list.append(exp == chosen_exp and k == chosen_k)
-        fig_p.add_trace(go.Scatter(
-            x=xs, y=ys, mode="markers+text",
-            name=f"Expansion {exp}×",
-            text=[str(k) for k in ks],
-            textposition="top center",
-            textfont=dict(size=9),
-            marker=dict(
-                size=[16 if c else 10 for c in is_chosen_list],
-                color=palette_exp[ei % len(palette_exp)],
-                symbol=["star" if c else "circle" for c in is_chosen_list],
-                line=dict(width=[2 if c else 0 for c in is_chosen_list], color="white"),
-            ),
-            hovertext=hovers, hoverinfo="text",
-        ))
-    _visible_ks = [k for k in ks if k >= 8] if focus_high_k else ks
-    _vis_r2   = [r2_grid[ei, ks.index(k)] for ei in range(len(expansions)) for k in _visible_ks if not np.isnan(r2_grid[ei, ks.index(k)])]
-    _vis_dead = [dead_grid[ei, ks.index(k)] for ei in range(len(expansions)) for k in _visible_ks if not np.isnan(dead_grid[ei, ks.index(k)])]
-    y_range = [max(0.0, float(np.min(_vis_r2)) - 0.02), 1.01] if _vis_r2 else [0, 1.01]
-    x_range = [-0.005, float(np.max(_vis_dead)) + 0.02] if _vis_dead else [0, 0.3]
+            st.plotly_chart(fig, use_container_width=True)
 
-    fig_p.update_layout(
-        xaxis_title="Dead neuron fraction (lower = better)",
-        yaxis_title="R² (higher = better)",
-        height=420, margin=dict(t=20, b=50, l=60, r=20),
-        paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-        font=dict(color="#fafafa"),
-        xaxis=dict(showgrid=True, gridcolor="#333", zeroline=False, range=x_range),
-        yaxis=dict(showgrid=True, gridcolor="#333", zeroline=False, range=y_range),
-        legend=dict(x=1.01, y=1.0, xanchor="left", yanchor="top",
-                    bgcolor="rgba(0,0,0,0)", borderwidth=0),
-    )
-    st.plotly_chart(fig_p, use_container_width=True)
-
-    # ── Raw table ─────────────────────────────────────────────────────────────
-    with st.expander("Raw sweep table"):
-        import pandas as pd
-        df = pd.DataFrame(rows)[["expansion", "k", "dict_size", "l0", "r2", "dead_frac"]]
-        df = df.sort_values(["expansion", "k"]).reset_index(drop=True)
-        df["chosen"] = (df["expansion"] == chosen_exp) & (df["k"] == chosen_k)
-        st.dataframe(df, use_container_width=True)
-
-
-_TAXONOMY_TABLE = [
-    # (experiment_label, expansion, inactive, separable, entangled, spurious)
-    ("Layer 0",  "1×",  "5%", "35%", "36%", "24%"),
-    ("Layer 1",  "1×",  "5%", "19%", "41%", "35%"),
-    ("Layer 2",  "1×",  "3%", "27%", "45%", "25%"),
-    ("Layer 2",  "2×",  "6%", "22%", "50%", "22%"),
-    ("Layer 2",  "4×",  "5%", "27%", "52%", "15%"),
-    ("Layer 2",  "8×", "10%", "38%", "45%",  "7%"),
-]
-
-_MONO_FIG_DIR = Path("results/monosemanticity")
-
-
-def _render_taxonomy_tab(run_data: dict, folder_name: str) -> None:
-    st.markdown(
-        "The standard monosemanticity metric (field breadth = 1) assumes all clinical concepts "
-        "are orthogonal. Our results show this is violated in EEG — age and pathology share "
-        "the same δ/θ neural primitive. We use a three-way taxonomy:"
-    )
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(
-            '<div style="border-left:4px solid #74c476;padding:6px 10px">'
-            '<b style="color:#74c476">Separable-monosemantic</b><br>'
-            '<span style="font-size:0.85em">One concept, no biological reason to co-fire. '
-            'More SAE capacity: n/a.</span></div>',
-            unsafe_allow_html=True,
-        )
-    with c2:
-        st.markdown(
-            '<div style="border-left:4px solid #fd8d3c;padding:6px 10px">'
-            '<b style="color:#fd8d3c">Entangled-monosemantic</b><br>'
-            '<span style="font-size:0.85em">Multiple labels sharing one neural primitive. '
-            'More SAE capacity: <b>does not resolve</b>.</span></div>',
-            unsafe_allow_html=True,
-        )
-    with c3:
-        st.markdown(
-            '<div style="border-left:4px solid #d62728;padding:6px 10px">'
-            '<b style="color:#d62728">Spurious-polysemantic</b><br>'
-            '<span style="font-size:0.85em">Unrelated concepts superposed due to capacity limits. '
-            'More SAE capacity: <b>resolves</b>.</span></div>',
-            unsafe_allow_html=True,
-        )
+    with st.expander("Show paper Figure 3 (static composite)"):
+        _show_paper_image("Figure 3", "Figure 3 — Monosemanticity taxonomy (paper composite)")
 
     st.markdown("---")
-
-    cross_fig = _MONO_FIG_DIR / "monosemanticity_cross_experiment.png"
-    if cross_fig.exists():
-        st.image(str(cross_fig), caption="Feature taxonomy fractions per layer (left) and monosemanticity vs expansion ratio (right).", use_container_width=True)
-    else:
-        st.info("Cross-experiment figure not found. Run `tools/analyze_monosemanticity.py --filter sleepfm_finetuned`.")
-
     st.markdown(
-        """
-| Experiment | Expansion | Inactive | Separable | Entangled | Spurious |
-|---|:---:|:---:|:---:|:---:|:---:|
-| Layer 0 | 1× | 5% | 35% | 36% | 24% |
-| Layer 1 | 1× | 5% | 19% | 41% | 35% |
-| Layer 2 | 1× | 3% | 27% | 45% | 25% |
-| Layer 2 | 2× | 6% | 22% | 50% | 22% |
-| Layer 2 | 4× | 5% | 27% | 52% | 15% |
-| Layer 2 | 8× | 10% | 38% | 45% | **7%** |
-"""
+        "**Figure 2 (§3.2)** — SAE-faithfulness layer sweep. Test AUROC of a linear probe trained on "
+        "mean-pooled embeddings as layer-ℓ activations are replaced by their TopK-SAE reconstructions."
     )
+    _show_paper_image("Figure 2", "Figure 2 — SAE-faithfulness layer sweep")
 
+
+def _render_steering_static_subtab() -> None:
     st.markdown(
-        '<div style="background:#1b3a2a;border:1px solid #74c476;border-radius:6px;'
-        'padding:10px 14px;margin:8px 0;color:#e8f5e9">'
-        '<b style="color:#74c476">Key result:</b> Spurious polysemanticity drops 25% → 7% '
-        'with expansion — this is the capacity-limited component. '
-        'Entangled polysemanticity is stable (45% → 52% → 45%) — it does <b>not</b> resolve, '
-        'confirming age and pathology share an irreducible δ/θ neural primitive. '
-        'Expansion=4 is the recommended operating point: spurious largely resolved (15%), '
-        'inactive features minimal (5%).'
-        '</div>',
-        unsafe_allow_html=True,
+        "**Figure 4 (§5)** — per-encoder, per-layer encoding strength (top row) and steering selectivity (bottom row) "
+        "for six clinical concepts (Age, Pathology, Sex, Epileptic Activity, ASM medication, Psychiatric medication)."
     )
+    _show_paper_image("Figure 4", "Figure 4 — Cross-model concept encoding & steering selectivity")
 
     st.markdown("---")
+    st.markdown(
+        "**Figure 6 (§6)** — spectrum-level concept steering on SleepFM L2 (E=8). Decoded spectrum after "
+        "clamping the top *n* TCAV-aligned features to the normal-class centroid."
+    )
+    _show_paper_image("Figure 6", "Figure 6 — Spectrum-level concept steering")
 
-    detail_key = "sleepfm_finetuned_layer2"
-    detail_fig = _MONO_FIG_DIR / f"monosemanticity_detail_{detail_key}.png"
-    if detail_fig.exists():
-        st.subheader("Layer 2 detail")
-        st.image(
-            str(detail_fig),
-            caption="Field-breadth histogram, field-level stacked breakdown, cross-field co-occurrence heatmap, and cross-layer monosemanticity fraction.",
-            use_container_width=True,
+
+def _render_steering_curves_subtab() -> None:
+    st.markdown(
+        "**Figure 5 (§5)** — interactive variant. Pick encoder family, expansion ratio, layer, and target concept. "
+        "**Red** curve = target-concept AUROC, **blue** = Pathology (off-target), grey dotted = random-direction "
+        "baseline. AUROC at *f=0* tells you how well the concept is *encoded*; the gap between target and "
+        "off-target curves (vs the random baseline) tells you how *selectively* it can be steered."
+    )
+    data = _load_steering_curves_data()
+    if not data:
+        st.info("Figure 5 data not found at `tools/paper_figures/Figure 5/data.npz`.")
+        return
+
+    parsed: Dict[str, Tuple[str, int, int]] = {}
+    for _, exp in data.keys():
+        if exp not in parsed:
+            p = _parse_experiment(exp)
+            if p is not None:
+                parsed[exp] = p
+
+    concepts = sorted({c for c, _ in data})
+    families = [f for f in ("SleepFM", "LaBraM", "REVE")
+                if any(v[0] == f for v in parsed.values())]
+
+    col_f, col_e, col_l, col_c = st.columns([1.2, 1.2, 1.2, 1.6])
+    with col_f:
+        family = st.selectbox("Encoder", families, key="steering_curves_family")
+    exps_in_family = {exp: (E, L) for exp, (fam, E, L) in parsed.items() if fam == family}
+    available_E = sorted({E for E, _ in exps_in_family.values()})
+    with col_e:
+        E_sel = st.selectbox("Expansion E", available_E, key="steering_curves_E", index=0)
+    available_L = sorted({L for exp, (E, L) in exps_in_family.items() if E == E_sel})
+    with col_l:
+        L_sel = st.selectbox("Layer (0-indexed)", available_L, key="steering_curves_L", index=0)
+
+    experiment = next((exp for exp, (E, L) in exps_in_family.items()
+                       if E == E_sel and L == L_sel), None)
+
+    # Concept selector: greyed-out labels for concepts without data at this config.
+    ordered = [c for c in ("Age", "Pathology", "Gender",
+                           "Medication (ASM)", "Medication (Psychiatric)") if c in concepts]
+    controls = [c for c in concepts if c not in ordered]
+    all_concepts = ordered + controls
+    available_here = {c for c in all_concepts if experiment is not None and (c, experiment) in data}
+
+    def _label(c: str) -> str:
+        return c if c in available_here else f"{c} — not run for this config"
+
+    with col_c:
+        concept = st.selectbox(
+            "Concept (target)",
+            all_concepts,
+            format_func=_label,
+            key="steering_curves_concept",
         )
+
+    if experiment is None:
+        st.info("No data for this configuration.")
+        return
+
+    entry = data.get((concept, experiment))
+    if entry is None:
+        # Coverage hint: which configs DO have this concept?
+        with_concept = sorted({exp for c, exp in data.keys() if c == concept})
+        in_family = [exp for exp in with_concept if parsed.get(exp, (None,))[0] == family]
+        st.warning(
+            f"**`{concept}`** has not been run for **{family} · L{L_sel} · E={E_sel}**. "
+            f"Across all encoders, {len(with_concept)}/{len(parsed)} configs have it; "
+            f"within {family}, {len(in_family)}/{sum(1 for v in parsed.values() if v[0]==family)} do."
+        )
+        st.caption(
+            "**Coverage note:** *Age* was run on every (encoder × layer × expansion). "
+            "*Pathology*, *Gender*, *Medication (ASM)* and *Medication (Psychiatric)* were only run on the "
+            "primary-expansion configs plus a handful of higher-E variants — the rest would need a fresh "
+            "steering pass against the per-token labels."
+        )
+        return
+
+    fracs    = np.asarray(entry["fracs"], dtype=float)
+    tgt_auc  = np.asarray(entry["tgt_auc"], dtype=float)
+    off_auc  = np.asarray(entry["off_auc"], dtype=float)
+    rand_tgt = np.asarray(entry.get("rand_tgt_auc_mean", []), dtype=float)
+    rand_off = np.asarray(entry.get("rand_off_auc_mean", []), dtype=float)
+
+    # ── Headline metrics (AUROC₀ + excess steerability) ────────────────────────
+    boot_tgt0 = np.asarray(entry.get("bootstrap_tgt_auc0", []), dtype=float)
+    auroc0      = float(boot_tgt0.mean()) if boot_tgt0.size else float(tgt_auc[0])
+    auroc0_std  = float(boot_tgt0.std(ddof=1)) if boot_tgt0.size > 1 else 0.0
+
+    ba = np.asarray(entry.get("bootstrap_areas", []), dtype=float)
+    br = np.asarray(entry.get("bootstrap_rand_areas", []), dtype=float)
+    if ba.size and ba.size == br.size:
+        excess_mean = float((ba - br).mean())
+        excess_std  = float((ba - br).std(ddof=1)) if ba.size > 1 else 0.0
     else:
-        folder_key = folder_name.replace("/", "_")
-        alt_fig = _MONO_FIG_DIR / f"monosemanticity_detail_{folder_key}.png"
-        if alt_fig.exists():
-            st.subheader("Detail")
-            st.image(str(alt_fig), use_container_width=True)
+        area      = float(entry.get("area", 0.0))
+        rand_area = float(entry.get("rand_area_mean", 0.0))
+        excess_mean = area - rand_area
+        excess_std  = float(entry.get("rand_area_std", 0.0))
+
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        st.metric(
+            "AUROC₀ — concept encoding strength",
+            f"{auroc0:.3f}",
+            delta=f"± {auroc0_std:.3f}" if auroc0_std > 0 else None,
+            delta_color="off",
+            help="Target-concept linear-probe AUROC at clamping fraction f=0 (no intervention). "
+                 "Bootstrap mean ± std across resamples of the probed token set.",
+        )
+    with m2:
+        sign = "+" if excess_mean >= 0 else ""
+        st.metric(
+            "Excess steerability",
+            f"{sign}{excess_mean:.3f}",
+            delta=f"± {excess_std:.3f}" if excess_std > 0 else None,
+            delta_color="off",
+            help="(target − off-target) AUROC area swept across f, minus the random-direction baseline. "
+                 "Positive = concept can be steered more than a random direction; near-zero = entangled.",
+        )
+    with m3:
+        st.metric(
+            "Sample size",
+            f"{entry.get('n_target_per_group', '?')} / group",
+            delta=f"{entry.get('n_features', '?')} SAE features",
+            delta_color="off",
+            help="Tokens per group used for the AUROC computation, and SAE dictionary size.",
+        )
+
+    fig = go.Figure()
+    if rand_tgt.size == fracs.size:
+        fig.add_scatter(x=fracs, y=rand_tgt, mode="lines", name="random — target",
+                        line=dict(color="#bbbbbb", dash="dot", width=1))
+    if rand_off.size == fracs.size:
+        fig.add_scatter(x=fracs, y=rand_off, mode="lines", name="random — Pathology",
+                        line=dict(color="#888888", dash="dot", width=1))
+    fig.add_scatter(x=fracs, y=tgt_auc, mode="lines+markers",
+                    name=f"{concept} (target)",
+                    line=dict(color="#c0392b", width=2.5))
+    fig.add_scatter(x=fracs, y=off_auc, mode="lines+markers",
+                    name="Pathology (off-target)",
+                    line=dict(color="#1f6fb4", width=2.5))
+    fig.update_layout(
+        height=460,
+        xaxis_title="Clamping fraction f",
+        yaxis_title="AUROC",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
+        margin=dict(l=50, r=20, t=70, b=50),
+    )
+    fig.update_yaxes(range=[0.0, 1.0])
+    fig.add_annotation(
+        text=f"<b>{family} · layer {L_sel} · E={E_sel}</b> &nbsp;·&nbsp; target = {concept}",
+        xref="paper", yref="paper", x=0.5, y=1.18,
+        showarrow=False, font=dict(size=14),
+        xanchor="center",
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 
-def page_sae_analysis(run_data: dict, folder_name: str) -> None:
-    """SAE Analysis — hyperparameter sweep + feature taxonomy."""
-    st.title("SAE Analysis")
-    st.caption("**Paper §3.2 · Figure 2** — SAE-faithfulness layer sweep and feature taxonomy (§3.3 · Figure 3).")
-    tab_sweep, tab_taxonomy = st.tabs(["Hyperparameter Sweep", "Feature Taxonomy"])
-    with tab_sweep:
-        _render_sae_sweep_content(run_data, folder_name)
-    with tab_taxonomy:
-        _render_taxonomy_tab(run_data, folder_name)
+def page_taxonomy_steering() -> None:
+    """Paper-aligned Taxonomy & Steering figures with one interactive panel."""
+    st.title("Taxonomy & Steering")
+    st.caption(
+        "**Paper §3.2 · Fig 2 + §3.3 · Fig 3 + §5–6 · Figs 4 / 5 / 6** — the paper's quantitative figures, "
+        "with an interactive variant of Figure 5."
+    )
+    tab_tax, tab_steer, tab_curves = st.tabs([
+        "Taxonomy",
+        "Steering (paper figures)",
+        "Steering curves (interactive)",
+    ])
+    with tab_tax:
+        _render_taxonomy_subtab()
+    with tab_steer:
+        _render_steering_static_subtab()
+    with tab_curves:
+        _render_steering_curves_subtab()
+
 
 
 def page_layer_explorer(folder_name: str) -> None:
@@ -3525,276 +3511,6 @@ def page_attention_explorer(
             )
             st.plotly_chart(fig_heads, use_container_width=True)
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Page — Demographics Explorer
-# ─────────────────────────────────────────────────────────────────────────────
-
-def page_demographics(app_cache: Optional[dict], folder_name: str, layer: int) -> None:
-    st.title("Demographics Explorer")
-    st.caption("**Paper §4** — SAE feature firing-rate enrichment across demographic and clinical groups.")
-    st.caption(
-        "SAE feature firing-rate enrichment across demographic and clinical groups · "
-        "subject-level Mann-Whitney U · BH FDR correction"
-    )
-
-    if not app_cache:
-        st.info("No app cache found. Run `tools/build_app_cache.py` for this experiment.")
-        return
-
-    enr_list = app_cache.get("feature_meta_enrichment", [])
-    if not enr_list:
-        st.info("No demographic enrichment data in cache. Rebuild with an updated `build_app_cache.py`.")
-        return
-
-    n_feat = len(enr_list)
-
-    # ── helpers ───────────────────────────────────────────────────────────────
-    def _age_key(v: str) -> int:
-        try:
-            return int(v.split("-")[0].replace("+", ""))
-        except ValueError:
-            return 999
-
-    def _build_matrix(field: str, cat_order: list) -> np.ndarray:
-        mat = np.ones((n_feat, len(cat_order)))
-        for fi, fenr in enumerate(enr_list):
-            for cat, ratio, _ in fenr.get(field, []):
-                if cat in cat_order:
-                    mat[fi, cat_order.index(cat)] = ratio
-        return mat
-
-    def _build_sig(field: str, cat_order: list) -> np.ndarray:
-        mat = np.zeros((n_feat, len(cat_order)), dtype=bool)
-        for fi, fenr in enumerate(enr_list):
-            for cat, _, q in fenr.get(field, []):
-                if cat in cat_order and q < 0.05:
-                    mat[fi, cat_order.index(cat)] = True
-        return mat
-
-    # age groups
-    _age_cats = sorted(
-        {c for fenr in enr_list for c, _, _ in fenr.get("age_group", []) if c != "unknown"},
-        key=_age_key,
-    )
-    _age_mat = _build_matrix("age_group", _age_cats)
-    _age_sig = _build_sig("age_group", _age_cats)
-    _age_order = np.argsort(np.argmax(_age_mat, axis=1))
-
-    # sex
-    _sex_cats = sorted({c for fenr in enr_list for c, _, _ in fenr.get("gender", [])})
-    _sex_mat  = _build_matrix("gender", _sex_cats)
-    _sex_sig  = _build_sig("gender", _sex_cats)
-    _sex_order = np.argsort(np.argmax(_sex_mat, axis=1))
-
-    # color maps
-    _plasma = px.colors.sample_colorscale(
-        "Plasma", [i / max(len(_age_cats) - 1, 1) for i in range(len(_age_cats))]
-    )
-    _age_cmap = dict(zip(_age_cats, _plasma))
-    _sex_pal  = {"female": "#6baed6", "male": "#fd8d3c"}
-
-    # ── shared bar helper ─────────────────────────────────────────────────────
-    def _enr_bar(cats: list, colors: list, title: str, height: int = 280) -> go.Figure:
-        names = [c for c, _, _ in cats]
-        vals  = [r for _, r, _ in cats]
-        tips  = [f"{c}: ×{r:.2f} (q={q:.2e})" for c, r, q in cats]
-        sigs  = ["★" if q < 0.05 else "" for _, _, q in cats]
-        y_max = max(vals) if vals else 2.0
-        fig = go.Figure(go.Bar(
-            x=names, y=vals,
-            marker_color=colors, marker_opacity=0.85,
-            text=[f"×{v:.1f}{s}" for v, s in zip(vals, sigs)],
-            textposition="outside", textfont=dict(size=9),
-            cliponaxis=False, showlegend=False,
-            customdata=tips,
-            hovertemplate="%{customdata}<extra></extra>",
-        ))
-        fig.add_hline(y=1.0, line_width=1, line_dash="dot", line_color="#888888")
-        fig.update_layout(
-            title=title,
-            xaxis=dict(tickfont=dict(size=9), tickangle=-35, automargin=True),
-            yaxis=dict(range=[0, max(y_max * 1.3, 2.1)], zeroline=False,
-                       showticklabels=False, showgrid=False),
-            height=height, margin=dict(t=35, b=10, l=10, r=10),
-            paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-            font=dict(color="#fafafa", size=10),
-        )
-        return fig
-
-    # ── Section 1: heatmaps ───────────────────────────────────────────────────
-    st.subheader("Enrichment heatmaps")
-    st.caption("Each cell = per-group firing rate ÷ global firing rate. ×1 = baseline. ★ = BH q < 0.05.")
-
-    col_age, col_sex = st.columns([3, 1])
-
-    with col_age:
-        _mat = _age_mat[_age_order]
-        _sig = _age_sig[_age_order]
-        _ylabels = [f"F{_age_order[i]}" for i in range(n_feat)]
-        _ann = [["★" if _sig[i, j] else "" for j in range(len(_age_cats))] for i in range(n_feat)]
-        fig_hm = go.Figure(go.Heatmap(
-            z=_mat, x=_age_cats, y=_ylabels,
-            colorscale="RdBu_r", zmid=1.0,
-            zmin=0, zmax=float(max(4.0, _mat.max())),
-            colorbar=dict(title="×", len=0.5, tickfont=dict(size=9)),
-            text=_ann, texttemplate="%{text}",
-            hovertemplate="F%{y} · %{x}<br>×%{z:.2f}<extra></extra>",
-        ))
-        fig_hm.update_layout(
-            title="Age group", height=600,
-            margin=dict(t=40, b=10, l=60, r=10),
-            paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-            font=dict(color="#fafafa", size=9),
-            yaxis=dict(tickfont=dict(size=7.5)),
-        )
-        st.plotly_chart(fig_hm, use_container_width=True, config={"displayModeBar": False})
-
-    with col_sex:
-        _mat_s = _sex_mat[_sex_order]
-        _sig_s = _sex_sig[_sex_order]
-        _ylabels_s = [f"F{_sex_order[i]}" for i in range(n_feat)]
-        _ann_s = [["★" if _sig_s[i, j] else "" for j in range(len(_sex_cats))] for i in range(n_feat)]
-        fig_hm_s = go.Figure(go.Heatmap(
-            z=_mat_s, x=_sex_cats, y=_ylabels_s,
-            colorscale="RdBu_r", zmid=1.0,
-            zmin=0, zmax=float(max(2.0, _mat_s.max())),
-            colorbar=dict(title="×", len=0.5, tickfont=dict(size=9)),
-            text=_ann_s, texttemplate="%{text}",
-            hovertemplate="F%{y} · %{x}<br>×%{z:.2f}<extra></extra>",
-        ))
-        fig_hm_s.update_layout(
-            title="Sex", height=600,
-            margin=dict(t=40, b=10, l=60, r=10),
-            paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-            font=dict(color="#fafafa", size=9),
-            yaxis=dict(tickfont=dict(size=7.5)),
-        )
-        st.plotly_chart(fig_hm_s, use_container_width=True, config={"displayModeBar": False})
-
-    st.markdown("---")
-
-    # ── Section 2: feature detail ─────────────────────────────────────────────
-    st.subheader("Feature detail")
-
-    def _peak(fi: int) -> tuple:
-        best_cat, best_ratio = "", 1.0
-        for field in ("age_group", "gender", "indication_group", "medication_group"):
-            for cat, ratio, q in enr_list[fi].get(field, []):
-                if ratio > best_ratio and q < 0.05:
-                    best_cat, best_ratio = cat, ratio
-        return best_cat, best_ratio
-
-    _feat_stats = app_cache.get("feature_stats", [])
-
-    _feat_opts = []
-    for fi in range(n_feat):
-        cat, ratio = _peak(fi)
-        if fi < len(_feat_stats):
-            fs = _feat_stats[fi]
-            n_active = fs.get("n_patches_active")
-            fire_str = f"  ·  {n_active:,} patches" if n_active is not None else (
-                f"  ·  {fs['fire_rate_pct']:.1f}% patches" if "fire_rate_pct" in fs else ""
-            )
-        else:
-            fire_str = ""
-        enr_str = f"  ·  ×{ratio:.1f} {cat}" if cat else ""
-        _feat_opts.append(f"F{fi}{fire_str}{enr_str}")
-
-    sel = st.selectbox("Feature", _feat_opts, key="demo_feat_sel")
-    sel_fi = int(sel.split("·")[0].replace("F", "").strip())
-    _enr = enr_list[sel_fi]
-
-    _ind_pal = px.colors.qualitative.Plotly
-    _med_pal = px.colors.qualitative.Pastel
-
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        _cats = sorted(_enr.get("age_group", []), key=lambda x: _age_key(x[0]))
-        st.plotly_chart(
-            _enr_bar(_cats, [_age_cmap.get(c, "#666") for c, _, _ in _cats], "Age group"),
-            use_container_width=True, config={"displayModeBar": False},
-        )
-    with c2:
-        _cats = sorted(_enr.get("gender", []), key=lambda x: x[0])
-        st.plotly_chart(
-            _enr_bar(_cats, [_sex_pal.get(c, "#aaa") for c, _, _ in _cats], "Sex"),
-            use_container_width=True, config={"displayModeBar": False},
-        )
-    with c3:
-        _cats = sorted(_enr.get("indication_group", []), key=lambda x: -x[1])
-        st.plotly_chart(
-            _enr_bar(_cats, [_ind_pal[i % len(_ind_pal)] for i in range(len(_cats))], "Indication"),
-            use_container_width=True, config={"displayModeBar": False},
-        )
-    with c4:
-        _cats = sorted(_enr.get("medication_group", []), key=lambda x: -x[1])
-        st.plotly_chart(
-            _enr_bar(_cats, [_med_pal[i % len(_med_pal)] for i in range(len(_cats))], "Medication"),
-            use_container_width=True, config={"displayModeBar": False},
-        )
-    st.caption("Enrichment = firing rate in group ÷ global rate  ·  ★ BH q < 0.05")
-
-    st.markdown("---")
-
-    # ── Section 3: top features per category ─────────────────────────────────
-    st.subheader("Top features per category")
-
-    _field_map = {
-        "Age group":  "age_group",
-        "Sex":        "gender",
-        "Indication": "indication_group",
-        "Medication": "medication_group",
-    }
-
-    _fc1, _fc2, _fc3 = st.columns([1, 2, 1])
-    with _fc1:
-        _field_sel = st.selectbox("Field", list(_field_map.keys()), key="demo_field_sel")
-    _field_key = _field_map[_field_sel]
-    _cats_for_field = sorted(
-        {c for fenr in enr_list for c, _, _ in fenr.get(_field_key, [])},
-        key=(_age_key if _field_key == "age_group" else lambda x: x),
-    )
-    with _fc2:
-        _cat_sel = st.selectbox("Category", _cats_for_field, key="demo_cat_sel")
-    with _fc3:
-        _top_n = st.slider("Top N", 3, 20, 8, key="demo_topn")
-
-    _rows = []
-    for fi, fenr in enumerate(enr_list):
-        for cat, ratio, q in fenr.get(_field_key, []):
-            if cat == _cat_sel:
-                _rows.append((ratio, q, fi))
-                break
-    _rows.sort(reverse=True)
-    _top = _rows[:_top_n]
-
-    if _top:
-        _ratios = [r for r, _, _ in _top]
-        _labels = [f"F{fi}" + ("★" if q < 0.05 else "") for _, q, fi in _top]
-        _colors = ["#e45756" if r >= 1 else "#4c78a8" for r in _ratios]
-        _tips   = [f"F{fi}: ×{r:.2f} (q={q:.2e})" for r, q, fi in _top]
-        fig_top = go.Figure(go.Bar(
-            x=_labels, y=_ratios,
-            marker_color=_colors,
-            text=[f"×{r:.2f}" for r in _ratios],
-            textposition="outside", cliponaxis=False,
-            customdata=_tips,
-            hovertemplate="%{customdata}<extra></extra>",
-        ))
-        fig_top.add_hline(y=1.0, line_width=1, line_dash="dot", line_color="#888888")
-        fig_top.update_layout(
-            title=f"Top {_top_n} features for {_field_sel}: {_cat_sel}",
-            yaxis=dict(title="Enrichment (×)", range=[0, max(_ratios) * 1.28]),
-            height=360,
-            margin=dict(t=50, b=30, l=50, r=10),
-            paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-            font=dict(color="#fafafa", size=11),
-        )
-        st.plotly_chart(fig_top, use_container_width=True, config={"displayModeBar": False})
-        st.caption("★ = BH q < 0.05  ·  Red = enriched, blue = depleted relative to global rate")
-    else:
-        st.info(f"No enrichment data found for {_cat_sel}.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -4378,11 +4094,6 @@ def main():
         page_tcav_explorer(run_data, folder_name, layer, tcav_cache, app_cache, exp_name=exp_name)
         return
 
-    if page == "Demographics Explorer":
-        app_cache = load_app_cache(str(p)) if (p := _app_cache_path(exp_name)) else None
-        page_demographics(app_cache, folder_name, layer)
-        return
-
     if page == "Concept Steering":
         app_cache = load_app_cache(str(p)) if (p := _app_cache_path(exp_name)) else None
         page_concept_steering(app_cache, sae_path, folder_name, layer)
@@ -4394,9 +4105,8 @@ def main():
         page_attention_explorer(run_data, attn_cache, folder_name, layer)
         return
 
-    if page == "SAE Analysis":
-        run_data = load_run_data(sae_path, spectral_decoder_path)
-        page_sae_analysis(run_data, folder_name)
+    if page == "Taxonomy & Steering":
+        page_taxonomy_steering()
         return
 
 
