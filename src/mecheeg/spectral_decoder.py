@@ -2018,7 +2018,16 @@ class SpectralDecoderTrainer:
             n_blocks=cfg.get("n_blocks", 3),
             dropout=cfg.get("dropout", 0.1),
         )
-        self.spectral_decoder.load_state_dict(state["spectral_decoder_state_dict"])
+        # Backward-compat: this module used to be named XAE. Old checkpoints
+        # (results/xae/*/xae_checkpoint.pt) store the weights under
+        # "xae_state_dict" instead of "spectral_decoder_state_dict".
+        sd = state.get("spectral_decoder_state_dict") or state.get("xae_state_dict")
+        if sd is None:
+            raise KeyError(
+                "checkpoint has neither 'spectral_decoder_state_dict' nor "
+                "'xae_state_dict'"
+            )
+        self.spectral_decoder.load_state_dict(sd)
 
         # Restore normalisation stats
         self.embed_mean = state["embed_mean"]

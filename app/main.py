@@ -236,9 +236,15 @@ def discover_runs() -> Tuple[
 
 
 def _spectral_decoder_path(folder_name: str) -> Optional[Path]:
+    # The XAE module was renamed to SpectralDecoder; the disk layout used by
+    # train_spectral_decoder.py writes to results/spectral_decoder/, while the
+    # currently deployed checkpoints (pulled from gs://sae4eeg-app-assets) still
+    # live under the original results/xae/ tree. Check both.
     candidates = [
         ROOT / "results" / "spectral_decoder" / folder_name / "spectral_decoder_checkpoint.pt",
         ROOT / "results" / "spectral_decoder" / "spectral_decoder_checkpoint.pt",  # legacy
+        ROOT / "results" / "xae" / folder_name / "xae_checkpoint.pt",
+        ROOT / "results" / "xae" / "xae_checkpoint.pt",
     ]
     return next((p for p in candidates if p.exists()), None)
 
