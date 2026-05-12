@@ -676,21 +676,73 @@ def page_home() -> None:
          None),
     ]
 
+    st.markdown(
+        """
+<style>
+.home-tab-ref {
+    display: inline-block;
+    background: rgba(120, 120, 140, 0.10);
+    color: #666;
+    border-radius: 999px;
+    padding: 2px 12px;
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    margin-bottom: 0.6rem;
+}
+.home-tab-title {
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin: 0.1rem 0 0.35rem 0;
+    line-height: 1.25;
+}
+.home-tab-blurb {
+    color: #555;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    margin-bottom: 0.9rem;
+}
+.home-tab-placeholder {
+    aspect-ratio: 16 / 9;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #f3f3f6 0%, #e7e7ee 100%);
+    display: flex; align-items: center; justify-content: center;
+    color: #aaa; font-size: 0.85rem; font-style: italic;
+}
+div[data-testid="stHorizontalBlock"] div[data-testid="stImage"] img {
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
     _home_thumb_dir = ROOT / "tools" / "paper_figures"
     for title, paper_ref, blurb, thumb_fig in tabs_map:
-        cols = st.columns([0.14, 0.22, 0.16, 0.48], vertical_alignment="center")
-        with cols[0]:
-            thumb_path = (_home_thumb_dir / thumb_fig / "figure.png") if thumb_fig else None
-            if thumb_path and thumb_path.exists():
-                st.image(str(thumb_path), use_container_width=True)
-            else:
-                st.write("")
-        with cols[1]:
-            if st.button(title, key=f"home_nav_{title}", use_container_width=True):
-                st.session_state["_page_nav_pending"] = title
-                st.rerun()
-        cols[2].markdown(f"<span style='color:#888;font-size:0.85rem;'>{paper_ref}</span>", unsafe_allow_html=True)
-        cols[3].markdown(f"<span style='font-size:0.9rem;'>{blurb}</span>", unsafe_allow_html=True)
+        with st.container(border=True):
+            cols = st.columns([0.42, 0.58], gap="large", vertical_alignment="center")
+            with cols[0]:
+                thumb_path = (_home_thumb_dir / thumb_fig / "figure.png") if thumb_fig else None
+                if thumb_path and thumb_path.exists():
+                    st.image(str(thumb_path), use_container_width=True)
+                else:
+                    st.markdown(
+                        "<div class='home-tab-placeholder'>No paper figure</div>",
+                        unsafe_allow_html=True,
+                    )
+            with cols[1]:
+                st.markdown(
+                    f"<span class='home-tab-ref'>{paper_ref}</span>"
+                    f"<div class='home-tab-title'>{title}</div>"
+                    f"<div class='home-tab-blurb'>{blurb}</div>",
+                    unsafe_allow_html=True,
+                )
+                if st.button(f"Open {title} →",
+                             key=f"home_nav_{title}",
+                             use_container_width=False):
+                    st.session_state["_page_nav_pending"] = title
+                    st.rerun()
+        st.markdown("<div style='height:0.4rem;'></div>", unsafe_allow_html=True)
 
     st.caption(
         "Default selection is the paper's primary experiment: **SleepFM, E=1, layer 2**. "
