@@ -235,17 +235,35 @@ def discover_runs() -> Tuple[
     return runs, exp_for, folder_for
 
 
+# Folders that share a spectral decoder with another folder. `*_local/`
+# retrains only ship the E=1 SAEs that are missing from their canonical
+# sibling; the canonical folder owns the xae checkpoint and we reuse it.
+_SPECTRAL_DECODER_CANONICAL: Dict[str, str] = {
+    "sleepfm_finetuned_local": "sleepfm_finetuned",
+    "reve_local":              "reve_qjbe08",
+}
+
+
 def _spectral_decoder_path(folder_name: str) -> Optional[Path]:
     # The XAE module was renamed to SpectralDecoder; the disk layout used by
     # train_spectral_decoder.py writes to results/spectral_decoder/, while the
     # currently deployed checkpoints (pulled from gs://sae4eeg-app-assets) still
     # live under the original results/xae/ tree. Check both.
-    candidates = [
-        ROOT / "results" / "spectral_decoder" / folder_name / "spectral_decoder_checkpoint.pt",
+    search_folders = [folder_name]
+    canonical = _SPECTRAL_DECODER_CANONICAL.get(folder_name)
+    if canonical and canonical != folder_name:
+        search_folders.append(canonical)
+
+    candidates: list[Path] = []
+    for f in search_folders:
+        candidates.extend([
+            ROOT / "results" / "spectral_decoder" / f / "spectral_decoder_checkpoint.pt",
+            ROOT / "results" / "xae" / f / "xae_checkpoint.pt",
+        ])
+    candidates.extend([
         ROOT / "results" / "spectral_decoder" / "spectral_decoder_checkpoint.pt",  # legacy
-        ROOT / "results" / "xae" / folder_name / "xae_checkpoint.pt",
         ROOT / "results" / "xae" / "xae_checkpoint.pt",
-    ]
+    ])
     return next((p for p in candidates if p.exists()), None)
 
 
