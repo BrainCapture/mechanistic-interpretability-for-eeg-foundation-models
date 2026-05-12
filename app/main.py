@@ -656,22 +656,41 @@ def page_home() -> None:
     )
 
     tabs_map = [
-        ("Feature Explorer",      "§3.1",       "Per-feature spectral signatures via the spectral decoder"),
-        ("Layer Explorer",        "§3",         "Animated joint UMAP showing token trajectories across encoder layers"),
-        ("TCAV Explorer",         "§4 · Fig 4", "Concept attribution via Testing with Concept Activation Vectors"),
-        ("Concept Steering",      "§5–6 · Figs 4 / 5 / 6", "Clamping concept-aligned features to the target centroid (single config, hands-on)"),
-        ("Taxonomy & Steering",   "§3.2 · Fig 2 + §3.3 · Fig 3 + §5–6 · Figs 4–6", "Paper figures + interactive Fig 5 (any encoder × layer × concept)"),
-        ("Attention Explorer",    "supplementary", "Encoder self-attention alongside SAE features (not in paper)"),
+        ("Feature Explorer",      "§3.1",
+         "Per-feature spectral signatures via the spectral decoder",
+         "Figure 6"),
+        ("Layer Explorer",        "§3",
+         "Animated joint UMAP showing token trajectories across encoder layers",
+         "Figure 2"),
+        ("TCAV Explorer",         "§4 · Fig 4",
+         "Concept attribution via Testing with Concept Activation Vectors",
+         "Figure 4"),
+        ("Concept Steering",      "§5–6 · Figs 4 / 5 / 6",
+         "Clamping concept-aligned features to the target centroid (single config, hands-on)",
+         "Figure 5"),
+        ("Taxonomy & Steering",   "§3.2 · Fig 2 + §3.3 · Fig 3 + §5–6 · Figs 4–6",
+         "Paper figures + interactive Fig 5 (any encoder × layer × concept)",
+         "Figure 3"),
+        ("Attention Explorer",    "supplementary",
+         "Encoder self-attention alongside SAE features (not in paper)",
+         None),
     ]
 
-    for title, paper_ref, blurb in tabs_map:
-        cols = st.columns([0.30, 0.18, 0.52])
+    _home_thumb_dir = ROOT / "tools" / "paper_figures"
+    for title, paper_ref, blurb, thumb_fig in tabs_map:
+        cols = st.columns([0.14, 0.22, 0.16, 0.48], vertical_alignment="center")
         with cols[0]:
+            thumb_path = (_home_thumb_dir / thumb_fig / "figure.png") if thumb_fig else None
+            if thumb_path and thumb_path.exists():
+                st.image(str(thumb_path), use_container_width=True)
+            else:
+                st.write("")
+        with cols[1]:
             if st.button(title, key=f"home_nav_{title}", use_container_width=True):
                 st.session_state["_page_nav_pending"] = title
                 st.rerun()
-        cols[1].markdown(f"<span style='color:#888;font-size:0.85rem;'>{paper_ref}</span>", unsafe_allow_html=True)
-        cols[2].markdown(f"<span style='font-size:0.9rem;'>{blurb}</span>", unsafe_allow_html=True)
+        cols[2].markdown(f"<span style='color:#888;font-size:0.85rem;'>{paper_ref}</span>", unsafe_allow_html=True)
+        cols[3].markdown(f"<span style='font-size:0.9rem;'>{blurb}</span>", unsafe_allow_html=True)
 
     st.caption(
         "Default selection is the paper's primary experiment: **SleepFM, E=1, layer 2**. "
