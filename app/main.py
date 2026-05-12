@@ -706,28 +706,28 @@ def page_home() -> None:
 """
         )
 
-    # ── For developers: pipeline + how to add a new encoder ─────────────────
-    with st.expander("For developers — adding a new encoder"):
+    # ── Pipeline overview ──────────────────────────────────────────────────────
+    with st.expander("Pipeline overview"):
         st.markdown(
             """
 ```
-Frozen Encoder  →  SAE  →  spectral decoder  →  App Cache  →  Streamlit app
-                                                                       ↑
-                                                       TCAV cache (run_tcav.py)
-                                                       Layer UMAP (build_layer_umap_cache.py)
-                                                       Feature prototypes (feature_maximization.py)
+EEG window  →  Encoder (frozen)  →  layer activations  →  TopK SAE  →  sparse features
+                                                                          │
+                                                ┌─────────────────────────┼───────────────────────┐
+                                                ▼                         ▼                       ▼
+                                       Spectral Decoder            TCAV (CAV probe)        Concept Steering
+                                       (per-feature                (concept attribution    (clamp top features
+                                        spectral signature)         per concept)            to donor centroid)
 ```
 
-**Run order for a new model** (replace `{ENCODER}` and `{L}` throughout):
-
-| Step | Script | Output | Used by |
-|------|--------|--------|---------|
-| 1 | `train_sae_layers.py --encoder {ENCODER}` | `results/features/{ENCODER}/sae_*.pt` | All pages |
-| 2 | `train_spectral_decoder.py --encoder {ENCODER}` | `results/spectral_decoder/{ENCODER}/` | Feature Explorer, spectral decoder plots |
-| 3 | `build_app_cache.py --experiment {ENCODER}_layer{L}` | `results/experiments/…/app_cache.pt` | Most pages |
-| 4 | `run_tcav.py --experiment {ENCODER}_layer{L}` | `results/tcav/…/tcav_cache.pt` | TCAV Explorer, Concept Steering |
-| 5 | `build_layer_umap_cache.py --encoder {ENCODER}` | `results/layer_umap/{ENCODER}/umap_cache.pt` | Layer Explorer |
-| 6 | `feature_maximization.py --experiment {ENCODER}_layer{L}` | `results/feat_viz/…/prototypes.npz` | Feature Explorer (prototypes tab) |
+| Stage | Method | Paper § | App tab |
+|-------|--------|---------|---------|
+| **Encoder** | SleepFM / LaBraM / REVE, all binary-finetuned on BrainCapture normal/abnormal | §2 | (sidebar selector) |
+| **SAE** | TopK Sparse Autoencoder over layer activations, sweep over expansion E ∈ {1, 2, 4, 8, 16, 32, 64} and sparsity k | §2.1 | (sidebar selector) |
+| **Spectral signatures** | Linear decoder mapping each encoder token to amplitude per frequency band; per-feature signatures from gradient with respect to active features | §3.1 | Feature Explorer |
+| **Taxonomy** | Three-way split (separable / entangled / spurious) based on spectral coherence + co-firing structure, sweep across encoder × layer × expansion | §3.2–3.3 · Figs 2, 3 | Taxonomy & Steering |
+| **TCAV** | Linear concept activation vectors trained on encoder activations; Variant C (Kim et al.) for headline scores | §4 · Fig 4 | TCAV Explorer |
+| **Concept Steering** | Clamp top-N TCAV-aligned features to the donor centroid; target / off-target AUROC drop with random-direction baselines | §5–6 · Figs 5, 6 | Concept Steering · Taxonomy & Steering |
 
 **Status indicators in the sidebar:** green dot = artifact exists on disk; orange = missing (build buttons appear in the relevant tab).
 """
