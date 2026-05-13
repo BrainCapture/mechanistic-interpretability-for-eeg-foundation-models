@@ -17,7 +17,7 @@ app/                  Interactive Streamlit explorer (browse SAE features, TCAV 
 
 This repo is **not end-to-end reproducible**, by design. The components that would be required to retrain or rerun the pipeline are private to the authors' institution and cannot be released:
 
-- **EEG data** — the clinical EEG dataset (~2,900 subjects) used in the paper is not publicly available
+- **EEG data** — the clinical EEG dataset (3,036 subjects) used in the paper is not publicly available
 - **Fine-tuned encoder weights** — the binary-finetuned SleepFM, REVE, and LaBraM checkpoints used in the paper are not released
 - **Pre-built result caches** — SAE/spectral decoder checkpoints, TCAV caches, steering caches
 
