@@ -38,17 +38,23 @@ authors:
   - family-names: Brink-Kjær
     given-names: Andreas
     affiliation: "DTU Health Tech, Technical University of Denmark"
+  - family-names: Gatej
+    given-names: Radu
+    affiliation: "BrainCapture, Copenhagen, Denmark"
   - family-names: Lehn-Schiøler
     given-names: Tue
     affiliation: "BrainCapture, Copenhagen, Denmark"
   - family-names: Beniczky
     given-names: Sándor
     affiliation: "Filadelfia Epilepsy Hospital, Dianalund, Denmark; University Hospital of Copenhagen, Copenhagen, Denmark"
-  - family-names: Hansen
-    given-names: Lars Kai
-    affiliation: "DTU Compute, Technical University of Denmark"
   - family-names: Puthusserypady
     given-names: Sadasivan
     affiliation: "DTU Health Tech, Technical University of Denmark"
+  - family-names: Zou
+    given-names: James
+    affiliation: "Stanford University"
+  - family-names: Hansen
+    given-names: Lars Kai
+    affiliation: "DTU Compute, Technical University of Denmark"
 type: software
 license: "LicenseRef-PolyForm-Noncommercial-1.0.0"

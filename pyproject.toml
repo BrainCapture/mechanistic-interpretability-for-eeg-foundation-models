@@ -12,10 +12,12 @@ authors = [
   { name = "Anton Storgaard Mosquera" },
   { name = "Nick Williams" },
   { name = "Andreas Brink-Kjær" },
+  { name = "Radu Gatej" },
   { name = "Tue Lehn-Schiøler" },
   { name = "Sándor Beniczky" },
-  { name = "Lars Kai Hansen" },
   { name = "Sadasivan Puthusserypady" },
+  { name = "James Zou" },
+  { name = "Lars Kai Hansen" },
 ]
 license = { text = "PolyForm-Noncommercial-1.0.0" }
 
