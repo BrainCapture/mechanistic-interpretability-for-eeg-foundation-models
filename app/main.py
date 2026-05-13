@@ -833,7 +833,7 @@ EEG window  →  Encoder (frozen)  →  layer activations  →  TopK SAE  →  s
 
 | Stage | Method | Paper § | App tab |
 |-------|--------|---------|---------|
-| **Encoder** | SleepFM / LaBraM / REVE, all binary-finetuned on BrainCapture normal/abnormal | §2 | (sidebar selector) |
+| **Encoder** | SleepFM / LaBraM / REVE, all binary-finetuned on a normal/abnormal clinical EEG corpus | §2 | (sidebar selector) |
 | **SAE** | TopK Sparse Autoencoder over layer activations, sweep over expansion E ∈ {1, 2, 4, 8, 16, 32, 64} and sparsity k | §2.1 | (sidebar selector) |
 | **Spectral signatures** | Linear decoder mapping each encoder token to amplitude per frequency band; per-feature signatures from gradient with respect to active features | §3.1 | Feature Explorer |
 | **Taxonomy** | Three-way split (separable / entangled / spurious) based on spectral coherence + co-firing structure, sweep across encoder × layer × expansion | §3.2–3.3 · Figs 2, 3 | Taxonomy & Steering |
@@ -971,7 +971,7 @@ def _model_cards_content() -> None:
     st.title("Model Cards")
     st.caption(
         "The paper studies three EEG foundation encoders. All are binary-finetuned "
-        "on the BrainCapture normal/abnormal classification task before SAE training."
+        "on a normal/abnormal clinical EEG classification task before SAE training."
     )
 
     # Paper encoders: SleepFM (v1.1, 3 layers, the original SetTransformer),
