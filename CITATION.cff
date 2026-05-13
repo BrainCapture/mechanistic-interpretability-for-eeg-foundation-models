@@ -1,8 +1,6 @@
 cff-version: 1.2.0
 message: >-
-  Citation metadata is withheld during anonymous review. After
-  de-anonymization, the full author list and preferred citation will be
-  restored.
+  If you use this code or build on the methodology, please cite the preprint.
 title: "Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders"
 abstract: >-
   EEG foundation models achieve state-of-the-art clinical performance, yet
@@ -19,6 +17,38 @@ abstract: >-
   interventions back to amplitude spectra, providing physiologically
   interpretable mechanistic explanations.
 authors:
-  - name: "Anonymous (withheld during review)"
+  - family-names: Lehn-Schiøler
+    given-names: William
+    affiliation: "BrainCapture, Copenhagen, Denmark; DTU Health Tech, Technical University of Denmark"
+  - family-names: Kjær
+    given-names: Magnus Ruud
+    affiliation: "DTU Health Tech, Technical University of Denmark"
+  - family-names: Thapa
+    given-names: Rahul
+    affiliation: "Stanford University"
+  - family-names: Pedersen
+    given-names: Magnus Guldberg
+    affiliation: "BrainCapture, Copenhagen, Denmark; DTU Compute, Technical University of Denmark"
+  - family-names: Mosquera
+    given-names: Anton Storgaard
+    affiliation: "BrainCapture, Copenhagen, Denmark; DTU Compute, Technical University of Denmark"
+  - family-names: Williams
+    given-names: Nick
+    affiliation: "Seer Medical, Melbourne, Australia"
+  - family-names: Brink-Kjær
+    given-names: Andreas
+    affiliation: "DTU Health Tech, Technical University of Denmark"
+  - family-names: Lehn-Schiøler
+    given-names: Tue
+    affiliation: "BrainCapture, Copenhagen, Denmark"
+  - family-names: Beniczky
+    given-names: Sándor
+    affiliation: "Filadelfia Epilepsy Hospital, Dianalund, Denmark; University Hospital of Copenhagen, Copenhagen, Denmark"
+  - family-names: Hansen
+    given-names: Lars Kai
+    affiliation: "DTU Compute, Technical University of Denmark"
+  - family-names: Puthusserypady
+    given-names: Sadasivan
+    affiliation: "DTU Health Tech, Technical University of Denmark"
 type: software
 license: "LicenseRef-PolyForm-Noncommercial-1.0.0"

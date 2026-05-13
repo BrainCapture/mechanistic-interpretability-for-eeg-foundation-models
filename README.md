@@ -1,8 +1,10 @@
 # Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders
 
-Companion code repository for the preprint **"Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders"**.
+Companion code repository for the preprint **"Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders"** (Lehn-Schiøler et al., 2026).
 
-> Author identities and affiliations are withheld during anonymous review. The paper PDF, LaTeX source, and figures will be added back to `paper/` once the review process is complete.
+Authors: William Lehn-Schiøler, Magnus Ruud Kjær, Rahul Thapa, Magnus Guldberg Pedersen, Anton Storgaard Mosquera, Nick Williams, Andreas Brink-Kjær, Tue Lehn-Schiøler, Sándor Beniczky, Lars Kai Hansen, Sadasivan Puthusserypady.
+
+Affiliations: BrainCapture (Copenhagen, Denmark); DTU Health Tech and DTU Compute (Technical University of Denmark, Kongens Lyngby); Stanford University; Seer Medical (Melbourne); Filadelfia Epilepsy Hospital (Dianalund); University Hospital of Copenhagen.
 
 ## What this repo contains
 
@@ -15,9 +17,9 @@ app/                  Interactive Streamlit explorer (browse SAE features, TCAV 
 
 ## What this repo does *not* contain (and why)
 
-This repo is **not end-to-end reproducible**, by design. The components that would be required to retrain or rerun the pipeline are private to the authors' institution and cannot be released:
+This repo is **not end-to-end reproducible**, by design. The components that would be required to retrain or rerun the pipeline are private to BrainCapture and cannot be released:
 
-- **EEG data** — the clinical EEG dataset (~2,900 subjects) used in the paper is not publicly available
+- **EEG data** — the BrainCapture clinical EEG dataset (~2,900 subjects, collected with BrainCapture's BC-1 system) used in the paper is not publicly available
 - **Fine-tuned encoder weights** — the binary-finetuned SleepFM, REVE, and LaBraM checkpoints used in the paper are not released
 - **Pre-built result caches** — SAE/spectral decoder checkpoints, TCAV caches, steering caches
 
@@ -78,11 +80,11 @@ Most scripts accept a `--help` flag describing their inputs and outputs.
 uv run streamlit run app/main.py
 ```
 
-The app walks through the SAE features, TCAV concept attributions, and concept steering interactively. Without the result caches (which require the private dataset + encoder weights — see the section above), each tab will display a "build this cache first" message and the matching `tools/...` command. The development repo runs against full caches; on this anonymous-review repo the value is in (a) reading how the analyses are presented and (b) verifying the code is self-consistent.
+The app walks through the SAE features, TCAV concept attributions, and concept steering interactively. Without the result caches (which require the private dataset + encoder weights — see the section above), each tab will display a "build this cache first" message and the matching `tools/...` command. The development repo runs against full caches; from this public repo the value is in (a) reading how the analyses are presented and (b) verifying the code is self-consistent. A hosted instance of the app running against the full caches is linked from the preprint.
 
 ## Citation
 
-Citation metadata is withheld during anonymous review. After de-anonymization, see `CITATION.cff`.
+See [`CITATION.cff`](CITATION.cff) for the full author list and BibTeX-compatible metadata.
 
 ## License
 
