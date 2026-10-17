@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: >-
-  If you use this code or build on the methodology, please cite the preprint.
+  If you use this code or build on the methodology, please cite the NeurIPS 2026 paper.
 title: "Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders"
 abstract: >-
   EEG foundation models achieve state-of-the-art clinical performance, yet
@@ -19,7 +19,7 @@ abstract: >-
 authors:
   - family-names: Lehn-Schiøler
     given-names: William
-    affiliation: "BrainCapture, Copenhagen, Denmark; DTU Health Tech, Technical University of Denmark"
+    affiliation: "BrainCapture, Kongens Lyngby, Denmark; DTU Health Tech; DTU Compute, Technical University of Denmark"
   - family-names: Kjær
     given-names: Magnus Ruud
     affiliation: "DTU Health Tech, Technical University of Denmark"
@@ -28,25 +28,19 @@ authors:
     affiliation: "Stanford University"
   - family-names: Pedersen
     given-names: Magnus Guldberg
-    affiliation: "BrainCapture, Copenhagen, Denmark; DTU Compute, Technical University of Denmark"
-  - family-names: Mosquera
-    given-names: Anton Storgaard
-    affiliation: "BrainCapture, Copenhagen, Denmark; DTU Compute, Technical University of Denmark"
+    affiliation: "BrainCapture, Kongens Lyngby, Denmark; DTU Compute, Technical University of Denmark"
+  - family-names: Mosquera Storgaard
+    given-names: Anton
+    affiliation: "BrainCapture, Kongens Lyngby, Denmark; DTU Compute, Technical University of Denmark"
   - family-names: Williams
     given-names: Nick
     affiliation: "Seer Medical, Melbourne, Australia"
   - family-names: Brink-Kjær
     given-names: Andreas
     affiliation: "DTU Health Tech, Technical University of Denmark"
-  - family-names: Gatej
-    given-names: Radu
-    affiliation: "BrainCapture, Copenhagen, Denmark"
   - family-names: Lehn-Schiøler
     given-names: Tue
-    affiliation: "BrainCapture, Copenhagen, Denmark"
-  - family-names: Beniczky
-    given-names: Sándor
-    affiliation: "Filadelfia Epilepsy Hospital, Dianalund, Denmark; University Hospital of Copenhagen, Copenhagen, Denmark"
+    affiliation: "BrainCapture, Kongens Lyngby, Denmark"
   - family-names: Puthusserypady
     given-names: Sadasivan
     affiliation: "DTU Health Tech, Technical University of Denmark"
@@ -58,3 +52,32 @@ authors:
     affiliation: "DTU Compute, Technical University of Denmark"
 type: software
 license: "LicenseRef-PolyForm-Noncommercial-1.0.0"
+version: 1.1.0
+preferred-citation:
+  type: conference-paper
+  title: "Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders"
+  collection-title: "Advances in Neural Information Processing Systems (NeurIPS)"
+  year: 2026
+  authors:
+    - family-names: Lehn-Schiøler
+      given-names: William
+    - family-names: Kjær
+      given-names: Magnus Ruud
+    - family-names: Thapa
+      given-names: Rahul
+    - family-names: Pedersen
+      given-names: Magnus Guldberg
+    - family-names: Mosquera Storgaard
+      given-names: Anton
+    - family-names: Williams
+      given-names: Nick
+    - family-names: Brink-Kjær
+      given-names: Andreas
+    - family-names: Lehn-Schiøler
+      given-names: Tue
+    - family-names: Puthusserypady
+      given-names: Sadasivan
+    - family-names: Zou
+      given-names: James
+    - family-names: Hansen
+      given-names: Lars Kai

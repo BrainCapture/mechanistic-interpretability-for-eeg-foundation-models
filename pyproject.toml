@@ -1,6 +1,6 @@
 [project]
 name = "mecheeg"
-version = "1.0.0"
+version = "1.1.0"
 description = "Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders (NeurIPS 2026)"
 readme = "README.md"
 requires-python = ">=3.12, <3.13"
@@ -9,12 +9,10 @@ authors = [
   { name = "Magnus Ruud Kjær" },
   { name = "Rahul Thapa" },
   { name = "Magnus Guldberg Pedersen" },
-  { name = "Anton Storgaard Mosquera" },
+  { name = "Anton Mosquera Storgaard" },
   { name = "Nick Williams" },
   { name = "Andreas Brink-Kjær" },
-  { name = "Radu Gatej" },
   { name = "Tue Lehn-Schiøler" },
-  { name = "Sándor Beniczky" },
   { name = "Sadasivan Puthusserypady" },
   { name = "James Zou" },
   { name = "Lars Kai Hansen" },

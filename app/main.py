@@ -657,7 +657,7 @@ def sidebar():
 
 def page_home() -> None:
     st.title("Mechanistic Interpretability for EEG Foundation Models")
-    st.caption("Anonymous Authors · Affiliations withheld for anonymous review")
+    st.caption("Lehn-Schiøler et al. · NeurIPS 2026 · BrainCapture, DTU, Stanford, Seer Medical")
     st.markdown(
         "EEG foundation models achieve state-of-the-art clinical performance, yet their "
         "internal computations remain opaque. We apply TopK Sparse Autoencoders across "

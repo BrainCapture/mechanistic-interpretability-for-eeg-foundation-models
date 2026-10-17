@@ -128,6 +128,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--experiment", default="sleepfm_finetuned_layer2")
 parser.add_argument("--max-tokens", type=int, default=0,
                     help="Cap on tokens to collect (0 = no cap, use all)")
+parser.add_argument("--batch-size", type=int, default=32,
+                    help="DataLoader batch size (use 16 for LaBraM on 16 GB GPUs)")
 args = parser.parse_args()
 
 EXP_DIR  = ROOT / "results" / "experiments" / args.experiment
@@ -163,14 +165,20 @@ model = _load_model(encoder_name,
 
 print("\n[Loading SpectralDecoder]")
 from mecheeg.spectral_decoder import SpectralDecoderTrainer
-spectral_decoder_trainer = SpectralDecoderTrainer(embed_dim=meta["embed_dim"], device=DEVICE)
-spectral_decoder_trainer.load(str(ROOT / meta["spectral_decoder_checkpoint"]))
-spectral_decoder_trainer.spectral_decoder.to(DEVICE).eval()
+if meta.get("spectral_decoder_checkpoint"):
+    spectral_decoder_trainer = SpectralDecoderTrainer(embed_dim=meta["embed_dim"], device=DEVICE)
+    spectral_decoder_trainer.load(str(ROOT / meta["spectral_decoder_checkpoint"]))
+    spectral_decoder_trainer.spectral_decoder.to(DEVICE).eval()
+else:
+    # Only the single-pass (target == final layer) path uses the decoder; the
+    # dual-layer path stores encoder embeddings alone.
+    spectral_decoder_trainer = None
+    print("  (no spectral_decoder_checkpoint in metadata; embeddings only)")
 
 # ── Full dataset loader ───────────────────────────────────────────────────────
 print("\n[Building full-dataset loader]")
 full_ds = H5PYDatasetLabeled(str(ROOT / data_path), transform=StandardizeLabel())
-full_loader = DataLoader(full_ds, batch_size=32, shuffle=False, num_workers=0)
+full_loader = DataLoader(full_ds, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
 n_subjects = len(np.unique(full_ds.subjects))
 print(f"  {len(full_ds)} windows  ·  {n_subjects} subjects")

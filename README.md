@@ -1,10 +1,10 @@
 # Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders
 
-Companion code repository for the preprint **"Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders"** (Lehn-Schiøler et al., 2026).
+Companion code repository for **"Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders"** (Lehn-Schiøler et al., NeurIPS 2026).
 
-Authors: William Lehn-Schiøler, Magnus Ruud Kjær, Rahul Thapa, Magnus Guldberg Pedersen, Anton Storgaard Mosquera, Nick Williams, Andreas Brink-Kjær, Radu Gatej, Tue Lehn-Schiøler, Sándor Beniczky, Sadasivan Puthusserypady, James Zou, Lars Kai Hansen.
+Authors: William Lehn-Schiøler, Magnus Ruud Kjær, Rahul Thapa, Magnus Guldberg Pedersen, Anton Mosquera Storgaard, Nick Williams, Andreas Brink-Kjær, Tue Lehn-Schiøler, Sadasivan Puthusserypady, James Zou, Lars Kai Hansen.
 
-Affiliations: BrainCapture (Copenhagen, Denmark); DTU Health Tech and DTU Compute (Technical University of Denmark, Kongens Lyngby); Stanford University; Seer Medical (Melbourne); Filadelfia Epilepsy Hospital (Dianalund); University Hospital of Copenhagen.
+Affiliations: BrainCapture (Kongens Lyngby, Denmark); DTU Health Tech and DTU Compute (Technical University of Denmark, Kongens Lyngby); Stanford University; Seer Medical (Melbourne).
 
 ## What this repo contains
 
