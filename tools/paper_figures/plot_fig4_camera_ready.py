@@ -17,6 +17,7 @@ Output: paper/camera_ready/figures/cross_model_steering_concepts.{png,pdf}
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import matplotlib
@@ -32,8 +33,9 @@ plt.rcParams.update({
 })
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-IN = ROOT / "results" / "camera_ready" / "fig4"
-OUT = ROOT / "paper" / "camera_ready" / "figures"
+IN = Path(os.environ.get("FIG_IN", ROOT / "results" / "camera_ready" / "fig4"))
+OUT = Path(os.environ.get("FIG_OUT_DIR", ROOT / "paper" / "camera_ready" / "figures"))
+STEM = os.environ.get("FIG_STEM", "cross_model_steering_concepts")
 
 # 0-based code index → shown as 1-based label
 FAMILIES = [
@@ -142,9 +144,9 @@ def main():
 
     fig.subplots_adjust(bottom=0.24, left=0.07, right=0.98, top=0.92)
     OUT.mkdir(parents=True, exist_ok=True)
-    fig.savefig(OUT / "cross_model_steering_concepts.png", dpi=300, bbox_inches="tight")
-    fig.savefig(OUT / "cross_model_steering_concepts.pdf", bbox_inches="tight")
-    print(f"wrote {OUT / 'cross_model_steering_concepts.png'}  ({len(data)} cells)")
+    fig.savefig(OUT / f"{STEM}.png", dpi=300, bbox_inches="tight")
+    fig.savefig(OUT / f"{STEM}.pdf", bbox_inches="tight")
+    print(f"wrote {OUT / (STEM + '.png')}  ({len(data)} cells)")
 
 
 if __name__ == "__main__":

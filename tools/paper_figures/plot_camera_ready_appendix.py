@@ -10,6 +10,7 @@ Writes into paper/camera_ready/figures/:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -21,8 +22,8 @@ from mecheeg.nature_fig_style import (  # noqa: E402
     nature_figure, nature_palette, save_nature_figure, set_nature_style, style_axes,
 )
 
-CR = ROOT / "results" / "camera_ready"
-OUT = ROOT / "paper" / "camera_ready" / "figures"
+CR = Path(os.environ.get("FIG_IN", ROOT / "results" / "camera_ready"))
+OUT = Path(os.environ.get("FIG_OUT_DIR", ROOT / "paper" / "camera_ready" / "figures"))
 CONCEPTS = ["Pathology", "Age", "Sex", "Med-Psych", "Med-ASM"]
 LABELS = {"Pathology": "Abnormality", "Age": "Age", "Sex": "Sex",
           "Med-Psych": "Med. (psych.)", "Med-ASM": "Med. (ASM)"}
@@ -111,6 +112,36 @@ def matched(S):
     plt.close(fig)
 
 
+def spectral():
+    """Band-amplitude shift under steering, mean ± sd over SAE seeds (confound-controlled)."""
+    import matplotlib.pyplot as plt
+    f = CR / "population_spectral_seeds.json"
+    if not f.exists():
+        return
+    summ = json.loads(f.read_text())["_summary"]
+    bands, blab = ["delta", "theta", "alpha", "beta", "gamma"], ["δ", "θ", "α", "β", "γ"]
+    panels = [("SleepFM", "SleepFM"), ("LaBraM", "LaBraM"), ("REVE", "REVE")]
+    pal = nature_palette(2)
+    fig, axes = nature_figure(width="double", height_mm=50, ncols=3, sharey=True)
+    for ax, (model, title) in zip(axes, panels):
+        x = np.arange(len(bands)); w = 0.38
+        for ci, (concept, lab) in enumerate([("classification", "abnormal → normal"), ("age", "child → elderly")]):
+            v = summ.get(f"{model} / {concept}")
+            if v is None:
+                continue
+            ax.bar(x + (ci - 0.5) * w, [v[b]["mean"] for b in bands], w, yerr=[v[b]["sd"] for b in bands],
+                   color=pal[ci], edgecolor="none", error_kw=dict(lw=0.6, capsize=1.2),
+                   label=f"{lab} (n = {v['n_subjects']})")
+        ax.axhline(0, color="0.4", lw=0.5)
+        ax.set_xticks(x, blab); ax.set_title(title)
+        ax.legend(frameon=False, loc="lower right", fontsize=5.5)
+        style_axes(ax)
+    axes[0].set_ylabel("amplitude shift (µV)")
+    save_nature_figure(fig, str(OUT / "app_spectral_seeds.png"))
+    save_nature_figure(fig, str(OUT / "app_spectral_seeds.pdf"))
+    plt.close(fig)
+
+
 def main():
     set_nature_style()
     S = json.loads((CR / "summary.json").read_text())
@@ -120,6 +151,7 @@ def main():
     collateral(S)
     native(seed_dirs)
     matched(S)
+    spectral()
     print("wrote", ", ".join(p.name for p in sorted(OUT.glob("app_*.png"))))
 
 

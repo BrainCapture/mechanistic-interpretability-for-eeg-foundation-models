@@ -12,6 +12,7 @@ Output: paper/camera_ready/figures/concept_steering_curves_3x3.{png,pdf}
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -34,8 +35,9 @@ from matplotlib.lines import Line2D
 from matplotlib.offsetbox import TextArea, HPacker, AnchoredOffsetbox
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-IN = ROOT / "results/camera_ready/fig4"
-OUT = ROOT / "paper/camera_ready/figures/concept_steering_curves_3x3.png"
+IN = Path(os.environ.get("FIG_IN", ROOT / "results/camera_ready/fig4"))
+OUT = (Path(os.environ["FIG_OUT_DIR"]) / (os.environ.get("FIG_STEM", "concept_steering_curves_3x3") + ".png")
+       if os.environ.get("FIG_OUT_DIR") else ROOT / "paper/camera_ready/figures/concept_steering_curves_3x3.png")
 
 # Only E=1 (matches the cross-model bar chart).
 KEEP_EXP = re.compile(r"^(sleepfm_finetuned|labram|reve_qjbe08)_layer\d+$")

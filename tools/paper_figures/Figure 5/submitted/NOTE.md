@@ -1,0 +1,1 @@
+This folder keeps the **submitted** version of this figure (single SAE per cell, layer labels as submitted). The camera-ready version one level up supersedes it; see the camera-ready README for the corrections.

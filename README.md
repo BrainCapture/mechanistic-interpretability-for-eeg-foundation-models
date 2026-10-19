@@ -33,6 +33,24 @@ This repo is **not end-to-end reproducible**, by design. The components that wou
 
 What is included is sufficient to (a) inspect the methodology and (b) audit the analysis code. Researchers porting the pipeline to their own EEG corpus and encoder can follow the existing encoder wrappers in `src/mecheeg/encoders.py` (`SleepFMBackend`, `REVEBackend`, `LaBraMBackend`) as templates.
 
+## Reproducing results on public data
+
+The central steering and entanglement results are replicated on public corpora from the
+Temple University Hospital EEG resource: TUAB, TUEV and TUSL. A data use agreement is
+required. These replications can be rerun end to end with the code here. See
+[`tools/rebuttal/README.md`](tools/rebuttal/README.md) for the full script → paper map.
+
+```bash
+uv run tools/rebuttal/preprocess_tuab_rebuttal.py            # TUAB → 128 Hz, 60 s windows
+uv run tools/rebuttal/finetune_sleepfm_tuab.py               # finetune SleepFM on TUAB
+uv run tools/rebuttal/build_tuab_steering_cache.py
+uv run tools/rebuttal/rebuttal_tuab_entanglement.py --sae-seeds 8
+```
+
+All steering numbers in the camera-ready are means over independently seeded SAEs.
+`tools/rebuttal/run_camera_ready_seeds.sh` and `tools/rebuttal/run_fig4_multiseed.sh`
+reproduce them.
+
 ## Pipeline overview
 
 ```
@@ -53,6 +71,10 @@ frozen encoder  →  SAE  →  spectral decoder
 | 6. Generate paper figures | `tools/paper_figures/Figure N/plot.py` | `tools/paper_figures/Figure N/figure.{png,pdf}` |
 
 See `tools/README.md` for the full script → paper section map.
+
+## Paper
+
+The NeurIPS 2026 camera-ready paper (PDF and LaTeX source) will be added to `paper/` once it is final.
 
 ## Paper figures
 
