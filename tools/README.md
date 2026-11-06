@@ -1,70 +1,63 @@
 # Analysis pipeline
 
-The minimum-viable set of scripts that produces every result in the paper. Pruned from the development repo to keep this companion repo focused on the paper's methodology.
+These are the scripts behind every result in the paper, grouped by the four pipeline stages of Figure 1. Run them from the repository root, in stage order: each stage consumes the outputs of the one before it.
 
-The pipeline is sequential — later steps depend on outputs from earlier steps. None of these scripts will run end-to-end here because the clinical EEG dataset and fine-tuned encoder weights used in the paper are private; the scripts are included so the methodology is auditable, and so researchers porting the pipeline to their own corpus have a clear starting point.
+The clinical cohort and finetuned encoder weights are private, so stages 0–IV do not run end to end from this repo. The code is here so the method can be audited and ported to another corpus or encoder. The [public-corpus replication](rebuttal/README.md) (TUAB, TUEV, TUSL) does run end to end.
 
-## Pipeline overview
+<p align="center"><img src="../docs/assets/pipeline.png" width="100%" alt="Four-stage pipeline"></p>
 
-```
-                            ┌────────────────────┐
-                            │  pretrained encoder │
-                            │ (SleepFM/REVE/LaBraM)│
-                            └─────────┬──────────┘
-                                      │  binary normal/abnormal
-                                      ▼
-                        finetune_{sleepfm_v1,reve,labram}_binary.py
-                                      │
-                                      ▼
-                              train_sae_layers.py
-                              train_sae_expansions.py
-                                      │
-                                      ▼
-                                 train_spectral_decoder.py
-                                 bootstrap_spectral_decoder_ci.py
-                                 compare_spectral_decoder.py
-                                      │
-                                      ▼
-                              build_app_cache.py
-                              build_taxonomy_cache.py
-                              build_steering_cache.py
-                                      │
-                                      ▼
-                                run_tcav.py
-                                analyze_monosemanticity.py
-                                probe_layer_sweep_kfold.py
-                                probe_table_finetune_sae.py
-                                run_kfold_native_head.py
-                                      │
-                                      ▼
-                              tools/paper_figures/Figure {1..7}/plot.py
-```
+## Stage 0 · Finetune and freeze the encoders (§2.1)
 
-## Script → paper section
+| Script | Produces |
+|---|---|
+| `finetune_sleepfm_v1_binary.py` | SleepFM finetuned on normal vs abnormal |
+| `finetune_reve_binary.py` | REVE finetuned on normal vs abnormal |
+| `finetune_labram_binary.py` | LaBraM finetuned on normal vs abnormal |
+| `run_kfold_native_head.py` | K-fold finetune of the native classifier head, intact vs SAE-substituted |
 
-| Script | Produces | Paper |
-|---|---|---|
-| `finetune_sleepfm_v1_binary.py` | SleepFM binary-finetuned checkpoint (`sleepfm1.ckpt`) | §3 (encoders) |
-| `finetune_reve_binary.py` | REVE binary-finetuned checkpoint | §3 |
-| `finetune_labram_binary.py` | LaBraM binary-finetuned checkpoint | §3 |
-| `train_sae_layers.py` | TopK SAE on each encoder layer | §3.1, Fig 2 |
-| `train_sae_expansions.py` | Expansion sweep (E=1..64) at a single layer | §3.2, Fig 3, Fig 7 |
-| `train_spectral_decoder.py` | Spectral decoder per encoder | §2 |
-| `bootstrap_spectral_decoder_ci.py` | Per-token bootstrap CIs for spectral decoder R² | §2 |
-| `compare_spectral_decoder.py` | Cross-model spectral decoder R² comparison | §2 (helper for `bootstrap_spectral_decoder_ci`) |
-| `build_app_cache.py` | Per-experiment feature-enrichment + spectral cache | infrastructure (used by steering / taxonomy caches) |
-| `build_taxonomy_cache.py` | Pre-computed monosemanticity taxonomy fractions | Fig 3 |
-| `build_steering_cache.py` | Per-experiment steering tokens + metadata | §5, Fig 4/5/6 |
-| `run_tcav.py` | TCAV scores (3 variants — see `src/mecheeg/tcav.py`) | §4, Fig 4 |
-| `analyze_monosemanticity.py` | Per-feature category-discrimination test | §3.1 (epileptiform null result) |
-| `probe_layer_sweep_kfold.py` | 5-fold AUROC of linear probe under SAE substitution at each layer | §3.2, Fig 2 |
-| `probe_table_finetune_sae.py` | Operating-layer SAE-faithfulness table (per encoder) | §3.2 (table) |
-| `run_kfold_native_head.py` | No-SAE baseline AUROC (per encoder × fold) | §3.2 (baseline column) |
-| `run_expansion_sweep.sh` | Convenience wrapper for the expansion sweep | shell helper |
-| `run_steering_sweep.sh` | Convenience wrapper for the steering sweep | shell helper |
+## Stage I · Spectral decoder (§3.2, §4.2)
 
-## What's *not* here (and why)
+| Script | Produces |
+|---|---|
+| `train_spectral_decoder.py` | Spectral decoder per encoder → `results/spectral_decoder/{encoder}/` |
+| `bootstrap_spectral_decoder_ci.py` | 95 % bootstrap CIs on amplitude R² and phase cosine |
+| `compare_spectral_decoder.py` | Cross-encoder R² comparison (helper for the bootstrap) |
 
-The development repo has dozens of additional scripts for: the Streamlit explorer app, codebook clustering, the Stage-2 granular-label experiments, exploratory plots, monosemanticity baselines (PCA/ICA, embedding direct), feature-activation maximisation, and various intermediate diagnostics. None of those feed paper figures or tables directly, so they are not part of this companion repo.
+## Stage II · Layer-wise SAEs (§3.3, §4.1)
 
-If you need any of them: the development snapshot at git tag `paper-submission-2026-05` in the development repo preserves the full state.
+| Script | Produces |
+|---|---|
+| `train_sae_layers.py` | TopK SAE (E = 1, k = 8) on every layer → `results/features/{encoder}/sae_*.pt` |
+| `train_sae_expansions.py`, `run_expansion_sweep.sh` | Expansion sweep E ∈ {1, 2, 4, 8, 16, 32, 64} (Figs. 3, 7) |
+| `probe_layer_sweep_kfold.py` | SAE-substitution faithfulness at every layer, 5-fold (Fig. 2) |
+| `probe_table_finetune_sae.py` | Linear-probe baseline vs SAE substitution at the operating layer (Table 1) |
+
+## Stage III · Concept attribution and taxonomy (§3.4, §4.3)
+
+| Script | Produces |
+|---|---|
+| `build_app_cache.py` | Per-experiment feature enrichment and spectral cache (input to stages III–IV) |
+| `run_tcav.py` | CAVs, feature enrichment, and TCAV scores → `results/tcav/{experiment}/` |
+| `build_taxonomy_cache.py` | Separable / Entangled / Dead fractions per (encoder, layer, E) (Fig. 3) |
+| `analyze_monosemanticity.py` | Per-feature category-discrimination test |
+
+## Stage IV · Concept steering (§3.5–3.6, §4.4–4.5)
+
+| Script | Produces |
+|---|---|
+| `build_steering_cache.py` | Whole-cohort embeddings and metadata for steering → `results/steering_cache/{experiment}/` |
+| `run_steering_sweep.sh` | Steering across the SAE expansion sweep |
+| `rebuttal/run_fig4_multiseed.sh` → `rebuttal/steering_seed_robustness.py` | Excess selectivity over 5 SAE seeds (Figs. 4–5) |
+| `rebuttal/steering_significance.py` | Permutation test against 200 random feature rankings |
+
+## Robustness, baselines, and public replication (§4.6, App. B–H)
+
+See [`rebuttal/README.md`](rebuttal/README.md): direction-source baselines (PCA, ICA, dense CAV), dedicated erasers (LEACE, INLP), the deployed classifier head, the TUAB / TUEV / TUSL replication, and seeded reruns.
+
+## Figures
+
+Each paper figure has a self-contained folder in [`paper_figures/`](paper_figures/) with `plot.py`, its bundled input data and the rendered output. See the [top-level README](../README.md#quickstart).
+
+## What is not here
+
+The development repo also holds the Streamlit app's cache builders for the layer and attention explorers, exploratory plots, the codebook clustering, and the granular-label experiments. None of these feed a paper figure or table, so they are left out of this companion repo.

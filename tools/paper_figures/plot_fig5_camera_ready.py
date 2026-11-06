@@ -159,6 +159,18 @@ for ek, _, _, ec in ENC_BINS:
         candidates.sort(key=lambda x: x[0])
         selected[(ek, sk)] = candidates[0][1] if candidates else None
 
+# Empty bins: show the nearest unused cell (same distance), starred at its AUROC0 (caption explains).
+_used = {(r["concept"], r["experiment"]) for r in selected.values() if r is not None}
+for ek, _, _, ec in ENC_BINS:
+    for sk, _, _, sc in SEL_BINS:
+        if selected.get((ek, sk)) is None:
+            pool = [r for r in entries if (r["concept"], r["experiment"]) not in _used]
+            if pool:
+                r = min(pool, key=lambda r: ((r["auroc0"] - ec) / 0.10) ** 2 + ((r["excess"] - sc) / 0.05) ** 2)
+                selected[(ek, sk)] = dict(r, outside_bin=True)
+                _used.add((r["concept"], r["experiment"]))
+                print(f"  [nearest] ({ek},{sk}) empty -> {r['concept']} {r['experiment']}")
+
 # ── Plot ───────────────────────────────────────────────────────────────────────
 fig, axes = plt.subplots(3, 3, figsize=(18, 9), sharex=True, sharey=True)
 
@@ -230,7 +242,7 @@ for r_idx, (ek, _, _, _) in enumerate(ENC_BINS):
         # baseline with the digits (avoids the visible drop seen with the
         # plain Unicode ± character).
         ax.text(0.0, 1.32,
-                rf"AUROC$_0$ = {sel['auroc0']:.2f} $\pm$ {sel['auroc0_std']:.2f}",
+                rf"AUROC$_0$ = {sel['auroc0']:.2f} $\pm$ {sel['auroc0_std']:.2f}" + (r"$^{\star}$" if sel.get("outside_bin") else ""),
                 transform=ax.transAxes, ha="left", va="bottom", fontsize=16,
                 color=BIN_COLOUR[ek], weight="bold",
                 bbox=dict(edgecolor=BIN_COLOUR[ek], lw=0.8, **box_kw))
@@ -281,18 +293,20 @@ for c_idx, (sk, _, _, _) in enumerate(SEL_BINS):
 
 # Shared legend at bottom.
 handles = [
-    Line2D([], [], color=C_TARGET, lw=2.0, label="Target probe"),
-    Line2D([], [], color=C_OFFTARG, lw=2.0, label="Off-target probe"),
-    Line2D([], [], color=C_RAND, lw=0.9, ls=(0, (3, 2)),
+    Line2D([], [], color=C_TARGET, lw=4.0, label="Target probe"),
+    Line2D([], [], color=C_OFFTARG, lw=4.0, label="Off-target probe"),
+    Line2D([], [], color=C_RAND, lw=2.0, ls=(0, (3, 2)),
            label="Random-ranking baselines"),
     Patch(facecolor=C_FILL_POS, alpha=0.55, label="TCAV-ranking area"),
     Patch(facecolor=C_FILL_NEG, alpha=0.40, label="Random baseline area"),
 ]
-fig.legend(handles=handles, loc="lower center", ncol=5, frameon=False,
-           fontsize=18, bbox_to_anchor=(0.5, -0.03))
+# Largest font that keeps the one-row legend within the figure width (~25 overflows).
+fig.legend(handles=handles, loc="upper center", ncol=5, frameon=False,
+           fontsize=23, handlelength=1.5, columnspacing=1.0, handletextpad=0.5,
+           bbox_to_anchor=(0.5, 0.03))
 fig.savefig(OUT, dpi=300, bbox_inches="tight")
 fig.savefig(OUT.with_suffix(".pdf"), bbox_inches="tight")
-print(f"Saved {OUT.relative_to(ROOT)}")
+print(f"Saved {OUT}")
 
 # Print the selection table for reference.
 print("\nSelected examples per bin:")

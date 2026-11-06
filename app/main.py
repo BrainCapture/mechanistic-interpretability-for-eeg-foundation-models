@@ -1,23 +1,20 @@
 
-"""SAE4EEG Interactive Explorer — Streamlit app entry point.
+"""Interactive companion to "Mechanistic Interpretability of EEG Foundation
+Models via Sparse Autoencoders" (NeurIPS 2026).
 
 Run with:
     uv run --group app streamlit run app/main.py
 
-Selection hierarchy
--------------------
-  Model   → pill buttons  (SleepFM | REVE)
-  Variant → pill buttons  (Pretrained | Finetuned)
-  Layer   → dropdown      (discovered from available checkpoints)
-
-The Feature Explorer works directly from SAE + spectral decoder checkpoints (no pre-built
-cache required). Other pages fall back to any matching pre-built app_cache.pt in
-results/experiments/.
+The sidebar exposes only the paper's operating points: encoder × layer at
+E=1, k=8, plus the E=8, k=64 SleepFM L3 dictionary behind Figure 6. Every
+page reads pre-built caches under results/ (SAE + spectral decoder
+checkpoints, app_cache.pt, tcav_cache.pt, layer UMAP, attention) and the
+camera-ready figures and seeded steering data bundled in app/static/paper/.
 """
 from __future__ import annotations
 
 import json
-import re
+import os
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -50,7 +47,7 @@ def _eeg_normalize(x: np.ndarray) -> np.ndarray:
     return x / scale
 
 st.set_page_config(
-    page_title="Mechanistic Interpretability for a Large EEG Encoder",
+    page_title="EEG Foundation Model Interpretability",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -150,39 +147,44 @@ def _parse_sae_filename(stem: str) -> Optional[Tuple[float, int, int]]:
     return expansion, layer, k_val
 
 
-def _scan_experiment_metadata() -> Dict[Tuple[str, float, int, int], str]:
-    """Map (encoder, expansion, layer, k) → experiment name.
+def _canon_folder(folder: str) -> str:
+    """`*_local/` re-training folders share experiments with their canonical sibling."""
+    return _SPECTRAL_DECODER_CANONICAL.get(folder, folder)
 
-    Walks `results/experiments/*/metadata.json` once and records each
-    one's (encoder × `sae_checkpoint`-parsed filename) tuple. Keyed by
-    the selection tuple rather than the absolute SAE path so the lookup
-    works whether the SAE lives in the canonical folder, in a re-training
-    folder like `sleepfm_finetuned_local/`, or has been moved.
+
+def _scan_experiment_metadata() -> Dict[Tuple[str, float, int, int], str]:
+    """Map (canonical SAE folder, expansion, layer, k) → experiment name.
+
+    Keyed by the folder of the experiment's `sae_checkpoint`, so pretrained
+    experiments (`results/features/reve/…`) never shadow finetuned ones
+    (`results/features/reve_qjbe08/…`). When several experiments share one SAE,
+    the canonical `{folder}_layer{L}` wins (e.g. `sleepfm_finetuned_layer2` over
+    the sweep variant `sleepfm_finetuned_exp1_k8_layer2`), else the shortest name.
     """
     out: Dict[Tuple[str, float, int, int], str] = {}
     exp_root = ROOT / "results" / "experiments"
     if not exp_root.exists():
         return out
-    for exp_dir in sorted(exp_root.iterdir()):
-        if not exp_dir.is_dir():
-            continue
+    for exp_dir in sorted(exp_root.iterdir(), key=lambda p: (len(p.name), p.name)):
         meta_path = exp_dir / "metadata.json"
-        if not meta_path.exists():
+        if not meta_path.is_file():
             continue
         try:
-            meta = json.loads(meta_path.read_text())
-            rel = meta.get("sae_checkpoint")
-            encoder = meta.get("encoder")
-            if not rel or not encoder:
-                continue
-            stem = Path(rel).stem
-            parsed = _parse_sae_filename(stem)
-            if parsed is None:
-                continue
-            E, L, K = parsed
-            out.setdefault((encoder, E, L, K), exp_dir.name)
-        except Exception:
+            rel = json.loads(meta_path.read_text()).get("sae_checkpoint")
+        except (OSError, json.JSONDecodeError):
             continue
+        if not rel:
+            continue
+        parsed = _parse_sae_filename(Path(rel).stem)
+        if parsed is None:
+            continue
+        E, L, K = parsed
+        folder = _canon_folder(Path(rel).parent.name)
+        key = (folder, E, L, K)
+        if exp_dir.name == f"{folder}_layer{L}":
+            out[key] = exp_dir.name          # canonical name always wins
+        else:
+            out.setdefault(key, exp_dir.name)
     return out
 
 
@@ -222,7 +224,7 @@ def discover_runs() -> Tuple[
             key = (encoder, expansion, layer, k_val)
             if k_val not in runs[encoder][expansion][layer]:
                 runs[encoder][expansion][layer][k_val] = ckpt
-                exp_for[key] = selection_to_exp.get(key)
+                exp_for[key] = selection_to_exp.get((_canon_folder(folder.name), expansion, layer, k_val))
                 folder_for[key] = folder.name
 
     # Sort each level
@@ -294,7 +296,7 @@ def _attention_cache_path(exp_name: Optional[str]) -> Optional[Path]:
 # Data loading (Streamlit resource-cached)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@st.cache_resource(show_spinner="Computing spectral features …")
+@st.cache_resource(show_spinner="Computing spectral features …", max_entries=8)
 def load_run_data(sae_path: str, spectral_decoder_path: Optional[str]) -> dict:
     """
     Load SAE + spectral decoder and compute per-feature spectral profiles.
@@ -366,22 +368,22 @@ def load_run_data(sae_path: str, spectral_decoder_path: Optional[str]) -> dict:
     return data
 
 
-@st.cache_resource(show_spinner="Loading app cache …")
+@st.cache_resource(show_spinner="Loading app cache …", max_entries=4)
 def load_app_cache(path: str) -> dict:
     return torch.load(path, weights_only=False, map_location="cpu")
 
 
-@st.cache_resource(show_spinner="Loading TCAV cache …")
+@st.cache_resource(show_spinner="Loading TCAV cache …", max_entries=8)
 def load_tcav_cache(path: str) -> dict:
     return torch.load(path, weights_only=False, map_location="cpu")
 
 
-@st.cache_resource(show_spinner="Loading attention cache …")
+@st.cache_resource(show_spinner="Loading attention cache …", max_entries=3)
 def load_attention_cache(path: str) -> dict:
     return torch.load(path, weights_only=False, map_location="cpu")
 
 
-@st.cache_data(show_spinner="Loading layer UMAP cache …", ttl=3600)
+@st.cache_resource(show_spinner="Loading layer UMAP cache …", max_entries=3)
 def load_layer_umap_cache(path: str) -> dict:
     cache = torch.load(path, weights_only=False, map_location="cpu")
     # Expose token_positions as a token_meta field so it can be used as a colour axis
@@ -411,234 +413,111 @@ def _load_eeg_patch(hdf5_path: str, local_idx: int, token_pos: int) -> np.ndarra
 # Sidebar
 # ─────────────────────────────────────────────────────────────────────────────
 
-def sidebar():
-    st.sidebar.title("Mechanistic Interpretability for EEG Foundation Models")
-    st.sidebar.markdown("---")
+# Configurations exposed in the hosted app: the paper's operating points
+# (Appendix B, Table 4). Every encoder uses E=1, k=8 at every layer; a few
+# layers additionally offer the sparsity-matched E=8, k=64 dictionary behind
+# Figure 6 (SleepFM L3) and Appendix G (LaBraM L12, REVE L9). Everything else
+# on disk stays reachable from the analysis scripts but is not a knob here.
+_PAPER_DICTS: List[Tuple[float, int, str]] = [
+    (1.0, 8,  "Standard · E=1, k=8"),
+    (8.0, 64, "Sparsity-matched · E=8, k=64"),
+]
+_ENC_LABELS = {"sleepfm": "SleepFM", "labram": "LaBraM", "reve": "REVE"}
+_ENC_ORDER  = ["sleepfm", "labram", "reve"]
+_PAGES = [
+    "Home",
+    "Feature Explorer",
+    "TCAV Explorer",
+    "Concept Steering",
+    "Taxonomy & Steering",
+    "Layer Explorer",
+    "Attention Explorer",
+]
 
+
+@st.cache_resource(show_spinner=False)
+def _paper_runs() -> Tuple[Dict[str, Dict[int, Dict[Tuple[float, int], Tuple[str, str, Optional[str]]]]], str]:
+    """{encoder: {layer: {(E, k): (sae_path, folder, exp_name)}}} for the paper configs.
+
+    Only configs with a built app cache are kept. Cached for the process
+    lifetime: the deployed results/ tree is read-only.
+    """
     runs_all, exp_for, folder_for = discover_runs()
-    if not runs_all:
-        st.sidebar.error("No SAE checkpoints found under results/features/")
-        st.stop()
-
-    # ── Data-availability filter ──────────────────────────────────────
-    # By default, hide configurations that have no app_cache.pt — most
-    # tabs are uninteresting without it. The actual toggle widget is
-    # rendered at the bottom of the sidebar under "Advanced" so reviewers
-    # see the model selectors first; we read its persisted state here.
-    only_with_cache = st.session_state.get("filter_with_cache", True)
-
-    def _filter_runs(src: dict) -> dict:
-        if not only_with_cache:
-            return src
-        out: dict = {}
-        for enc, by_E in src.items():
-            for E, by_L in by_E.items():
-                for L, by_K in by_L.items():
-                    for K in by_K:
-                        exp_name = exp_for.get((enc, E, L, K))
-                        if exp_name and (
-                            ROOT / "results" / "experiments" / exp_name / "app_cache.pt"
-                        ).exists():
-                            out.setdefault(enc, {}).setdefault(E, {}).setdefault(L, {})[K] = by_K[K]
-        return out
-
-    runs = _filter_runs(runs_all)
-    if not runs:
-        st.sidebar.warning(
-            "No configs have a built `app_cache.pt` yet. Toggle off "
-            "**Only configs with data** to browse SAE checkpoints without "
-            "downstream caches."
-        )
-        runs = runs_all
-
-    # ── Encoder ───────────────────────────────────────────────────────
-    _ENC_LABELS = {"sleepfm": "SleepFM", "reve": "REVE", "labram": "LaBraM"}
-    _ENC_ORDER  = ["sleepfm", "reve", "labram"]
-    enc_keys    = [e for e in _ENC_ORDER if e in runs]
-    enc_display = [_ENC_LABELS[e] for e in enc_keys]
-
-    st.sidebar.markdown("**Model**")
-    enc_choice = st.sidebar.pills(
-        "Model", enc_display,
-        default=enc_display[0],
-        label_visibility="collapsed",
-        key="enc_pills",
-    )
-    encoder = enc_keys[enc_display.index(enc_choice)]
-
-    # ── Helpers ───────────────────────────────────────────────────────
-    # Subtle row of snap-point labels under a select_slider. The slider's
-    # own value indicator handles "which one is selected", so this row is
-    # purely informational — kept light/muted to avoid visual clutter.
-    def _tick_row(labels: list[str]) -> None:
-        html = (
-            '<div style="display:flex;justify-content:space-between;'
-            'font-size:0.68rem;color:rgba(150,150,150,0.75);'
-            'padding:0 8px;margin:-4px 0 10px;letter-spacing:0.02em;">'
-            + "".join(f"<span>{lbl}</span>" for lbl in labels)
-            + "</div>"
-        )
-        st.sidebar.markdown(html, unsafe_allow_html=True)
-
-    # ── Expansion ─────────────────────────────────────────────────────
-    expansions = sorted(runs[encoder].keys())
-    def _fmt_E(E: float) -> str:
-        return f"{int(E)}×" if float(E).is_integer() else f"{E}×"
-
-    st.sidebar.markdown("**Expansion**")
-    if len(expansions) >= 2:
-        _E_default = 1.0 if 1.0 in expansions else expansions[0]
-        expansion = st.sidebar.select_slider(
-            "Expansion", expansions,
-            value=_E_default,
-            format_func=_fmt_E,
-            label_visibility="collapsed",
-            key="E_slider",
-        )
-        _tick_row([_fmt_E(E) for E in expansions])
-    else:
-        expansion = expansions[0]
-        st.sidebar.caption(f"Only {_fmt_E(expansion)} available for {enc_choice}")
-
-    # ── Layer ─────────────────────────────────────────────────────────
-    # Some (encoder, E) combinations only have a subset of layers — that's
-    # surfaced naturally by the dropdown options.
-    layers = sorted(runs[encoder][expansion].keys())
-
-    st.sidebar.markdown("**Layer**")
-    layer = st.sidebar.selectbox(
-        "Layer", layers,
-        format_func=lambda L: f"Layer {L}",
-        label_visibility="collapsed",
-        key="layer_sel",
-    )
-
-    # ── k (sparsity) ──────────────────────────────────────────────────
-    # k is exposed as a sparsity percentage (k / n_features) so the user
-    # picks the desired sparsity rather than a raw integer. Most encoders
-    # ship one k for every E (a fixed low k=8); SleepFM at layer 2 also
-    # has higher-k "k-scaled" variants.
-    _EMBED_DIM: Dict[str, int] = {"sleepfm": 128, "labram": 200, "reve": 512}
-    embed_dim = _EMBED_DIM.get(encoder, 128)
-    n_features = int(embed_dim * float(expansion))
-
-    k_options = sorted(runs[encoder][expansion][layer].keys())
-    def _fmt_k_pct(k: int) -> str:
-        return f"{100.0 * k / n_features:.2f}%"
-
-    st.sidebar.markdown("**Sparsity**")
-    if len(k_options) >= 2:
-        k_sel = st.sidebar.select_slider(
-            "Sparsity", k_options,
-            value=k_options[0],
-            format_func=_fmt_k_pct,
-            label_visibility="collapsed",
-            key="k_slider",
-        )
-        _tick_row([_fmt_k_pct(k) for k in k_options])
-    else:
-        k_sel = k_options[0]
-        st.sidebar.caption(f"{_fmt_k_pct(k_sel)} (k = {k_sel})")
-
-    selection_key = (encoder, expansion, layer, k_sel)
-    sae_path    = str(runs[encoder][expansion][layer][k_sel])
-    folder_name = folder_for[selection_key]
-    exp_name    = exp_for[selection_key]
-    spectral_decoder_p = _spectral_decoder_path(folder_name)
-
-    # ── Model overview ────────────────────────────────────────────────
-    st.sidebar.markdown("---")
+    wanted = {(E, k) for E, k, _ in _PAPER_DICTS}
+    out: Dict[str, Dict[int, Dict[Tuple[float, int], Tuple[str, str, Optional[str]]]]] = {}
+    for enc, by_E in runs_all.items():
+        for E, by_L in by_E.items():
+            for L, by_K in by_L.items():
+                for K, path in by_K.items():
+                    if (E, K) not in wanted:
+                        continue
+                    exp = exp_for.get((enc, E, L, K))
+                    if _app_cache_path(exp) is None:
+                        continue
+                    out.setdefault(enc, {}).setdefault(L, {})[(E, K)] = (
+                        str(path), folder_for[(enc, E, L, K)], exp,
+                    )
     try:
-        meta      = torch.load(sae_path, map_location="cpu", weights_only=False)
-        meta_E    = meta.get("expansion", expansion)
-        meta_k    = meta.get("k", k_sel)
-        edim      = meta.get("embed_dim", "?")
-        n_feat    = (
-            int(float(edim) * float(meta_E))
-            if isinstance(edim, (int, float)) and isinstance(meta_E, (int, float))
-            else "?"
-        )
+        import tomllib
+        with open(ROOT / "pyproject.toml", "rb") as f:
+            version = tomllib.load(f)["project"]["version"]
     except Exception:
-        meta_E = expansion
-        meta_k = k_sel
-        edim = n_feat = "?"
+        version = "?"
+    return out, version
 
-    if exp_name:
-        st.sidebar.caption(f"`{exp_name}`")
-    else:
-        st.sidebar.caption(f"`{folder_name}` (no experiment metadata)")
 
-    if isinstance(meta_k, (int, float)) and isinstance(n_feat, int) and n_feat > 0:
-        sparsity_pct = 100.0 * float(meta_k) / n_feat
-        sparsity_lbl = f"{sparsity_pct:.2f}%"
-    else:
-        sparsity_lbl = "?"
-
-    ca, cb = st.sidebar.columns(2)
-    ca.metric("Features",  f"{n_feat:,}" if isinstance(n_feat, int) else n_feat)
-    cb.metric("Embed dim", str(edim))
-    cc, cd = st.sidebar.columns(2)
-    cc.metric("Expansion", f"{meta_E}×")
-    cd.metric("Sparsity",  sparsity_lbl, help=f"Top-k = {meta_k}")
-
-    def _dot(ok: bool) -> str:
-        return "🟢" if ok else "🟠"
-
-    has_cache = _app_cache_path(exp_name) is not None
-    has_tcav  = _tcav_cache_path(exp_name) is not None
-    has_attn  = _attention_cache_path(exp_name) is not None
+def sidebar():
     st.sidebar.markdown(
-        f"{_dot(spectral_decoder_p is not None)} spectral decoder &nbsp;&nbsp; "
-        f"{_dot(has_cache)} Cache &nbsp;&nbsp; "
-        f"{_dot(has_tcav)} TCAV &nbsp;&nbsp; "
-        f"{_dot(has_attn)} Attn",
+        "### Mechanistic Interpretability of EEG Foundation Models\n"
+        "<span style='font-size:0.8rem;opacity:0.7'>NeurIPS 2026 · interactive companion</span>",
         unsafe_allow_html=True,
     )
 
-    # ── Page navigation ───────────────────────────────────────────────
-    st.sidebar.markdown("---")
-    _PAGES = [
-        "Home",
-        "Feature Explorer",
-        "Layer Explorer",
-        "TCAV Explorer",
-        "Concept Steering",
-        "Taxonomy & Steering",
-        "Attention Explorer",
-    ]
-    page = st.sidebar.radio(
-        "Page",
-        _PAGES,
-        label_visibility="collapsed",
-        key="page_nav",
+    runs, version = _paper_runs()
+    if not runs:
+        st.sidebar.error("No SAE checkpoints with an app cache found under results/.")
+        st.stop()
+
+    enc_keys = [e for e in _ENC_ORDER if e in runs]
+    enc_display = [_ENC_LABELS[e] for e in enc_keys]
+    enc_choice = st.sidebar.segmented_control(
+        "Model", enc_display, default=enc_display[0], key="enc_pills",
+    ) or enc_display[0]
+    encoder = enc_keys[enc_display.index(enc_choice)]
+
+    # Layers are 1-based in the paper; code and caches are 0-based.
+    layers = sorted(runs[encoder])
+    _default_L = 2 if encoder == "sleepfm" and 2 in layers else layers[-1]
+    layer = st.sidebar.selectbox(
+        "Layer", layers,
+        index=layers.index(_default_L),
+        format_func=lambda L: f"L{L + 1}",
+        key=f"layer_sel_{encoder}",
     )
 
-    # ── Advanced (data-availability filter) ────────────────────────────
-    st.sidebar.markdown("---")
-    with st.sidebar.expander("Advanced"):
-        st.toggle(
-            "Only configs with data",
-            value=True,
-            help=(
-                "When on, the selectors above only show (encoder, expansion, "
-                "layer, sparsity) combinations that have a precomputed "
-                "`app_cache.pt`. Turn off to see every trained SAE on disk."
-            ),
-            key="filter_with_cache",
+    dicts = runs[encoder][layer]
+    if len(dicts) > 1:
+        labels = {(E, k): lbl for E, k, lbl in _PAPER_DICTS if (E, k) in dicts}
+        E_k = st.sidebar.radio(
+            "Dictionary", list(labels), format_func=labels.get, key="dict_sel",
+            help="E = expansion (dictionary size / embedding dim), k = active features per token. "
+                 "E=8, k=64 is the dictionary behind Fig. 6 (SleepFM L3) and App. G.",
         )
+    else:
+        E_k = next(iter(dicts))
+    sae_path, folder_name, exp_name = dicts[E_k]
+    spectral_decoder_p = _spectral_decoder_path(folder_name)
 
-    # ── Version ───────────────────────────────────────────────────────
-    try:
-        import tomllib
-        from datetime import date
-        with open(ROOT / "pyproject.toml", "rb") as _f:
-            _ver = tomllib.load(_f)["project"]["version"]
-        _date = date.today().strftime("%Y-%m-%d")
-    except Exception:
-        _ver = "?"
-        _date = ""
-    st.sidebar.markdown("---")
-    st.sidebar.caption(f"v{_ver} · {_date}")
+    st.sidebar.divider()
+    page = st.sidebar.radio("Page", _PAGES, label_visibility="collapsed", key="page_nav")
+
+    st.sidebar.divider()
+    st.sidebar.caption(
+        f"E={E_k[0]:g} · k={E_k[1]} · `{exp_name}`  \n"
+        "[Paper](https://github.com/BrainCapture/mechanistic-interpretability-for-eeg-foundation-models/blob/main/paper/Mechanistic_Interpretability_of_EEG_Foundation_Models_via_Sparse_Autoencoders.pdf)"
+        " · [Code](https://github.com/BrainCapture/mechanistic-interpretability-for-eeg-foundation-models)"
+        f" · v{version}"
+    )
 
     return (
         sae_path,
@@ -655,320 +534,104 @@ def sidebar():
 # Page 0 — Home
 # ─────────────────────────────────────────────────────────────────────────────
 
+_STATIC = ROOT / "app" / "static"
+_PAPER_STATIC = _STATIC / "paper"
+_PAPER_URL = (
+    "https://github.com/BrainCapture/mechanistic-interpretability-for-eeg-foundation-models/"
+    "blob/main/paper/Mechanistic_Interpretability_of_EEG_Foundation_Models_via_Sparse_Autoencoders.pdf"
+)
+_CODE_URL = "https://github.com/BrainCapture/mechanistic-interpretability-for-eeg-foundation-models"
+
+_HOME_PAGES = [
+    ("Feature Explorer",    "§3.2–3.3 · Stages I–II",
+     "Browse every SAE feature: its spectral signature, firing statistics and top-activating EEG.",
+     "feature_explorer"),
+    ("TCAV Explorer",       "§3.4 · Stage III",
+     "Which features encode abnormality, age, sex and medication, and how strongly.",
+     "tcav_explorer"),
+    ("Concept Steering",    "§3.5 · Fig. 6",
+     "Clamp concept-aligned features to a target group and watch the decoded spectrum move.",
+     "concept_steering"),
+    ("Taxonomy & Steering", "§4.3–4.4 · Figs. 3–5",
+     "The paper's taxonomy and selectivity results, with every steering curve explorable.",
+     "taxonomy_steering"),
+    ("Layer Explorer",      "supplementary",
+     "Animated UMAP of the same tokens as they move through the encoder's layers.",
+     "layer_explorer"),
+    ("Attention Explorer",  "supplementary",
+     "Encoder self-attention shown alongside the SAE features.",
+     "attention_explorer"),
+]
+
+
+def _go_to(title: str) -> None:
+    st.session_state["_page_nav_pending"] = title
+
+
 def page_home() -> None:
-    st.title("Mechanistic Interpretability for EEG Foundation Models")
-    st.caption("Lehn-Schiøler et al. · NeurIPS 2026 · BrainCapture, DTU, Stanford, Seer Medical")
+    st.title("Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders")
     st.markdown(
-        "EEG foundation models achieve state-of-the-art clinical performance, yet their "
-        "internal computations remain opaque. We apply TopK Sparse Autoencoders across "
-        "SleepFM, REVE, and LaBraM to extract interpretable feature dictionaries grounded "
-        "in a clinical taxonomy, and use **concept steering** with a target-vs-off-target "
-        "metric to expose three regimes — selectively steerable, encoded-but-entangled, "
-        "and non-encoded. A **spectral decoder** maps the interventions back to amplitude "
-        "spectra, turning latent manipulations into physiologically interpretable "
-        "frequency signatures."
+        "William Lehn-Schiøler · Magnus Ruud Kjær · Rahul Thapa · Magnus Guldberg Pedersen · "
+        "Anton Mosquera Storgaard · Nick Williams · Andreas Brink-Kjær · Tue Lehn-Schiøler · "
+        "Sadasivan Puthusserypady · James Zou · Lars Kai Hansen  \n"
+        f"**NeurIPS 2026** · [Paper (PDF)]({_PAPER_URL}) · [Code]({_CODE_URL})"
+    )
+    st.markdown(
+        "We train TopK sparse autoencoders on three EEG transformers (**SleepFM, REVE, LaBraM**), "
+        "map the learned features to clinical concepts with TCAV, and test them causally with "
+        "**concept steering**. A **spectral decoder** turns each intervention back into an "
+        "amplitude spectrum a clinician can read."
     )
 
-    st.divider()
+    fig1 = _PAPER_STATIC / "fig1_pipeline.png"
+    if fig1.exists():
+        st.image(str(fig1), width="stretch",
+                 caption="Figure 1. The four-stage pipeline, run on a frozen, finetuned encoder.")
 
-    # ── Reading the paper alongside the app ──────────────────────────────────
-    st.subheader("Reading the paper alongside the app")
-    st.markdown(
-        "Each tab below corresponds to a section or figure of the paper. The sidebar "
-        "drives all tabs: pick a model + expansion + layer, and every tab updates."
-    )
-
-    tabs_map = [
-        ("Feature Explorer",      "§3.1",
-         "Per-feature spectral signatures via the spectral decoder",
-         "feature_explorer", "Figure 6"),
-        ("Layer Explorer",        "§3",
-         "Animated joint UMAP showing token trajectories across encoder layers",
-         "layer_explorer", "Figure 2"),
-        ("TCAV Explorer",         "§4 · Fig 4",
-         "Concept attribution via Testing with Concept Activation Vectors",
-         "tcav_explorer", "Figure 4"),
-        ("Concept Steering",      "§5–6 · Figs 4 / 5 / 6",
-         "Clamping concept-aligned features to the target centroid (single config, hands-on)",
-         "concept_steering", "Figure 5"),
-        ("Taxonomy & Steering",   "§3.2 · Fig 2 + §3.3 · Fig 3 + §5–6 · Figs 4–6",
-         "Paper figures + interactive Fig 5 (any encoder × layer × concept)",
-         "taxonomy_steering", "Figure 3"),
-        ("Attention Explorer",    "supplementary",
-         "Encoder self-attention alongside SAE features (not in paper)",
-         "attention_explorer", None),
-    ]
-
-    st.markdown(
-        """
-<style>
-.home-tab-ref {
-    display: inline-block;
-    background: rgba(120, 120, 140, 0.10);
-    color: #666;
-    border-radius: 999px;
-    padding: 2px 12px;
-    font-size: 0.78rem;
-    letter-spacing: 0.02em;
-    margin-bottom: 0.6rem;
-}
-.home-tab-title {
-    font-size: 1.35rem;
-    font-weight: 600;
-    margin: 0.1rem 0 0.35rem 0;
-    line-height: 1.25;
-}
-.home-tab-blurb {
-    color: #555;
-    font-size: 0.95rem;
-    line-height: 1.45;
-    margin-bottom: 0.9rem;
-}
-.home-tab-placeholder {
-    aspect-ratio: 16 / 9;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #f3f3f6 0%, #e7e7ee 100%);
-    display: flex; align-items: center; justify-content: center;
-    color: #aaa; font-size: 0.85rem; font-style: italic;
-}
-div[data-testid="stHorizontalBlock"] div[data-testid="stImage"] img {
-    border-radius: 8px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-}
-</style>
-""",
-        unsafe_allow_html=True,
-    )
-
-    _home_app_thumb_dir   = ROOT / "app" / "static" / "home_thumbs"
-    _home_paper_thumb_dir = ROOT / "tools" / "paper_figures"
-    def _resolve_thumb(slug, paper_fig):
-        # Prefer in-app thumbnails (generated by tools/generate_home_thumbs.py);
-        # fall back to the corresponding paper-figure PNG.
-        if slug:
-            p = _home_app_thumb_dir / f"{slug}.png"
-            if p.exists():
-                return p
-        if paper_fig:
-            p = _home_paper_thumb_dir / paper_fig / "figure.png"
-            if p.exists():
-                return p
-        return None
-
-    for title, paper_ref, blurb, thumb_slug, paper_fig in tabs_map:
-        with st.container(border=True):
-            cols = st.columns([0.42, 0.58], gap="large", vertical_alignment="center")
-            with cols[0]:
-                thumb_path = _resolve_thumb(thumb_slug, paper_fig)
-                if thumb_path:
-                    st.image(str(thumb_path), use_container_width=True)
-                else:
-                    st.markdown(
-                        "<div class='home-tab-placeholder'>No preview available</div>",
-                        unsafe_allow_html=True,
-                    )
-            with cols[1]:
-                st.markdown(
-                    f"<span class='home-tab-ref'>{paper_ref}</span>"
-                    f"<div class='home-tab-title'>{title}</div>"
-                    f"<div class='home-tab-blurb'>{blurb}</div>",
-                    unsafe_allow_html=True,
-                )
-                if st.button(f"Open {title} →",
-                             key=f"home_nav_{title}",
-                             use_container_width=False):
-                    st.session_state["_page_nav_pending"] = title
-                    st.rerun()
-        st.markdown("<div style='height:0.4rem;'></div>", unsafe_allow_html=True)
-
+    st.subheader("Explore")
     st.caption(
-        "Default selection is the paper's primary experiment: **SleepFM, E=1, layer 2**. "
-        "Caches (TCAV, attention, layer-UMAP) are pre-built for the canonical configurations; "
-        "tabs that require a missing cache show a clear build hint."
+        "Pick a **model** and **layer** in the sidebar; every page follows that choice. "
+        "The default is the paper's primary configuration: SleepFM, layer L3."
     )
+    thumb_dir = _STATIC / "home_thumbs"
+    for row in range(0, len(_HOME_PAGES), 3):
+        cols = st.columns(3, gap="medium")
+        for col, (title, ref, blurb, slug) in zip(cols, _HOME_PAGES[row:row + 3]):
+            with col, st.container(border=True):
+                thumb = thumb_dir / f"{slug}.png"
+                if thumb.exists():
+                    st.image(str(thumb), width="stretch")
+                st.markdown(f"**{title}**  \n<span style='font-size:0.8rem;opacity:0.65'>{ref}</span>",
+                            unsafe_allow_html=True)
+                st.caption(blurb)
+                st.button(f"Open {title} →", key=f"home_nav_{title}",
+                          on_click=_go_to, args=(title,))
 
-    # ── Data availability heatmaps ────────────────────────────────────────────
-    _render_data_availability()
-
-    # ── Glossary ───────────────────────────────────────────────────────────────
     with st.expander("Glossary"):
         st.markdown(
             """
 | Term | Meaning |
 |------|---------|
-| **SAE** | Sparse Autoencoder — a bottleneck network trained on encoder representations to find a sparse, over-complete dictionary of interpretable features. |
-| **Spectral decoder** | A small spectral decoder that maps encoder token embeddings to amplitude + phase per EEG frequency band. |
-| **App cache** | Pre-computed `.pt` file containing UMAP coordinates, cluster assignments, morphology embeddings, and other heavy computations. Built by `build_app_cache.py`. |
-| **TCAV cache** | Pre-computed concept activation vectors and per-feature TCAV scores. Built by `run_tcav.py`. |
-| **Top-k SAE** | SAE variant where exactly *k* features are active per token (hard sparsity). |
-| **Fire rate** | Fraction of tokens for which a given SAE feature is non-zero. |
-| **Dominant band** | EEG frequency band with the largest positive amplitude change when the feature fires. |
-| **CAV** | Concept Activation Vector — a linear classifier trained to separate concept tokens from random tokens in encoder activation space. |
-| **TCAV score (Variant A)** | Weight-space alignment: fraction of k-fold CAVs where the SAE encoder direction and the CAV point in the same direction. Binary per feature (0 or 1). |
-| **TCAV score (Variant C)** | Kim et al. formulation: fraction of concept examples where the model-level directional derivative w.r.t. the concept is positive. Continuous and example-dependent. |
-| **Δ fire rate** | Difference in firing rate between concept tokens and the baseline. Positive = feature fires more on concept EEG. |
-| **BH-adjusted p** | Benjamini–Hochberg FDR-corrected p-value. |
-| **Label correlation** | Pearson *r* between a feature's per-token activation and the binary normal/abnormal label. |
-| **Token** | One patch of EEG processed by the encoder. SleepFM: 5 s per channel-averaged patch. REVE: 1 s per single-channel patch (19 channels). LaBraM: 1 s patches across 19 channels. |
-| **UMAP** | Uniform Manifold Approximation and Projection — non-linear dimensionality reduction used to visualise high-dimensional token embeddings in 2D. |
-| **Attention** | Transformer self-attention weights, inspected per layer. High *attention received* (column sum) indicates tokens the model treats as contextually important. |
-| **Concept steering** | Intervention that zeros out SAE features aligned with a concept to test whether the concept is causally encoded by those features. |
-| **Feature taxonomy** | Three-way classification of SAE features: *separable* (one clear spectral pattern), *entangled* (multiple mixed patterns), or *spurious* (noise / dead). |
+| **SAE** | Sparse autoencoder: learns a sparse, over-complete dictionary of features from an encoder layer's activations. |
+| **TopK SAE** | SAE in which exactly *k* features are active per token. |
+| **E (expansion)** | Dictionary size divided by the embedding dimension. |
+| **Spectral decoder** | Small MLP mapping a token embedding to its amplitude (and phase) spectrum. |
+| **Token** | One EEG patch seen by the encoder. SleepFM: channel-averaged; REVE and LaBraM: one channel, one second. |
+| **Fire rate** | Fraction of tokens on which a feature is non-zero. |
+| **CAV** | Concept activation vector: a linear direction separating concept tokens from the rest. |
+| **TCAV score** | Fraction of concept examples whose prediction is pushed up by the concept direction (Kim et al.). |
+| **Concept steering** | Clamping the most concept-aligned SAE features to the target group's centroid, then decoding. |
+| **AUROC₀** | Probe AUROC before any clamping: how strongly the concept is encoded. |
+| **Excess selectivity Δ̃** | Area between off-target and target AUROC curves under clamping, minus the mean of 200 random rankings. |
+| **Taxonomy** | Separable (one concept), entangled (several concepts share a feature), dead (never informative). |
 """
         )
 
-    # ── Pipeline overview ──────────────────────────────────────────────────────
-    with st.expander("Pipeline overview"):
-        st.markdown(
-            """
-```
-EEG window  →  Encoder (frozen)  →  layer activations  →  TopK SAE  →  sparse features
-                                                                          │
-                                                ┌─────────────────────────┼───────────────────────┐
-                                                ▼                         ▼                       ▼
-                                       Spectral Decoder            TCAV (CAV probe)        Concept Steering
-                                       (per-feature                (concept attribution    (clamp top features
-                                        spectral signature)         per concept)            to donor centroid)
-```
-
-| Stage | Method | Paper § | App tab |
-|-------|--------|---------|---------|
-| **Encoder** | SleepFM / LaBraM / REVE, all binary-finetuned on BrainCapture normal/abnormal | §2 | (sidebar selector) |
-| **SAE** | TopK Sparse Autoencoder over layer activations, sweep over expansion E ∈ {1, 2, 4, 8, 16, 32, 64} and sparsity k | §2.1 | (sidebar selector) |
-| **Spectral signatures** | Linear decoder mapping each encoder token to amplitude per frequency band; per-feature signatures from gradient with respect to active features | §3.1 | Feature Explorer |
-| **Taxonomy** | Three-way split (separable / entangled / spurious) based on spectral coherence + co-firing structure, sweep across encoder × layer × expansion | §3.2–3.3 · Figs 2, 3 | Taxonomy & Steering |
-| **TCAV** | Linear concept activation vectors trained on encoder activations; Variant C (Kim et al.) for headline scores | §4 · Fig 4 | TCAV Explorer |
-| **Concept Steering** | Clamp top-N TCAV-aligned features to the donor centroid; target / off-target AUROC drop with random-direction baselines | §5–6 · Figs 5, 6 | Concept Steering · Taxonomy & Steering |
-
-**Status indicators in the sidebar:** green dot = artifact exists on disk; orange = missing (build buttons appear in the relevant tab).
-"""
-        )
-
-    # ── Model Cards ────────────────────────────────────────────────────────────
-    with st.expander("Model Cards"):
+    with st.expander("Model cards"):
         _model_cards_content()
 
 
-def _render_data_availability() -> None:
-    """Per-encoder layer × expansion heatmap showing artifact completeness."""
-    runs, exp_for, folder_for = discover_runs()
-    if not runs:
-        return
-
-    # Each cell evaluates four artifacts; the cell colour is the count present.
-    encoders = [
-        ("sleepfm", "SleepFM"),
-        ("labram",  "LaBraM"),
-        ("reve",    "REVE"),
-    ]
-    encoders = [(k, lbl) for (k, lbl) in encoders if k in runs]
-    if not encoders:
-        return
-
-    st.markdown("---")
-    st.subheader("Data availability — what's explorable")
-    st.caption(
-        "Per-encoder grid of `(layer × expansion)`. Each cell scores how many "
-        "of the four required artifacts are present for that config: "
-        "**SAE checkpoint · spectral decoder · app cache · TCAV cache**. "
-        "Green ⇒ every tab works for that config; red ⇒ only the bare SAE is on disk."
-    )
-
-    # Discrete 5-step colormap so 'all four present' looks decisively green.
-    # 0=red, 1=orange, 2=amber, 3=light green, 4=full green
-    colorscale = [
-        [0.00, "#c0392b"],
-        [0.25, "#e67e22"],
-        [0.50, "#f1c40f"],
-        [0.75, "#82c95e"],
-        [1.00, "#2e8b3d"],
-    ]
-    art_labels = ["SAE", "Spectral", "App cache", "TCAV"]
-
-    for encoder_key, encoder_label in encoders:
-        expansions = sorted(runs[encoder_key].keys())
-        all_layers = sorted({L for E in expansions for L in runs[encoder_key][E].keys()})
-        if not expansions or not all_layers:
-            continue
-
-        Z         = np.full((len(all_layers), len(expansions)), np.nan)
-        hover_txt = [["" for _ in expansions] for _ in all_layers]
-        for li, L in enumerate(all_layers):
-            for ei, E in enumerate(expansions):
-                ks = runs[encoder_key].get(E, {}).get(L, {})
-                if not ks:
-                    hover_txt[li][ei] = "(no SAE)"
-                    continue
-                k_val = min(ks.keys())
-                key   = (encoder_key, E, L, k_val)
-                folder = folder_for.get(key, "")
-                exp    = exp_for.get(key)
-                sae_ok       = ks[k_val].exists()
-                spectral_ok  = _spectral_decoder_path(folder) is not None
-                app_cache_ok = _app_cache_path(exp) is not None
-                tcav_ok      = _tcav_cache_path(exp) is not None
-                checks = [sae_ok, spectral_ok, app_cache_ok, tcav_ok]
-                Z[li, ei] = float(sum(checks))
-                hover_txt[li][ei] = (
-                    f"<b>L{L} · E={int(E)}</b><br>"
-                    + "<br>".join(
-                        f"{'✓' if c else '✗'} {lab}"
-                        for lab, c in zip(art_labels, checks)
-                    )
-                    + (f"<br><i>{exp}</i>" if exp else f"<br><i>{folder}</i>")
-                )
-
-        # Compact height that scales with the number of layers
-        n_layers = len(all_layers)
-        fig_h = max(140, 36 + n_layers * 22)
-
-        fig = go.Figure(go.Heatmap(
-            z=Z,
-            x=[f"×{int(E)}" for E in expansions],
-            y=[f"L{L}" for L in all_layers],
-            text=hover_txt, hovertemplate="%{text}<extra></extra>",
-            zmin=0, zmax=4, colorscale=colorscale,
-            xgap=2, ygap=2, showscale=False,
-        ))
-        fig.update_layout(
-            title=dict(text=f"<b>{encoder_label}</b>", x=0.0,
-                       font=dict(size=14, color="#333")),
-            xaxis=dict(side="bottom", tickfont=dict(color="#555")),
-            yaxis=dict(autorange="reversed", tickfont=dict(color="#555")),
-            height=fig_h, margin=dict(l=40, r=10, t=40, b=30),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        )
-        st.plotly_chart(fig, use_container_width=True,
-                        config={"displayModeBar": False})
-
-    # Single shared legend underneath
-    st.markdown(
-        """
-<div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;
-            font-size:0.8rem; color:#555; margin-top:-0.4rem;">
-  <span><span style="display:inline-block;width:14px;height:14px;background:#2e8b3d;
-       border-radius:3px;vertical-align:middle;margin-right:4px;"></span>
-       all four artifacts</span>
-  <span><span style="display:inline-block;width:14px;height:14px;background:#82c95e;
-       border-radius:3px;vertical-align:middle;margin-right:4px;"></span>
-       three of four</span>
-  <span><span style="display:inline-block;width:14px;height:14px;background:#f1c40f;
-       border-radius:3px;vertical-align:middle;margin-right:4px;"></span>
-       two of four</span>
-  <span><span style="display:inline-block;width:14px;height:14px;background:#e67e22;
-       border-radius:3px;vertical-align:middle;margin-right:4px;"></span>
-       just SAE + one more</span>
-  <span><span style="display:inline-block;width:14px;height:14px;background:#c0392b;
-       border-radius:3px;vertical-align:middle;margin-right:4px;"></span>
-       SAE only</span>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-
 def _model_cards_content() -> None:
-    st.title("Model Cards")
     st.caption(
         "The paper studies three EEG foundation encoders. All are binary-finetuned "
         "on the BrainCapture normal/abnormal classification task before SAE training."
@@ -1018,7 +681,7 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
                   attn_cache: Optional[dict] = None) -> None:
     enc_label = _ENCODER_LABELS.get(data["encoder"], data["encoder"].upper())
     st.title("Feature Explorer")
-    st.caption("**Paper §3.1** — per-feature spectral signatures via the spectral decoder.")
+    st.caption("**§3.2–3.3.** Each SAE feature, decoded to an amplitude spectrum by the spectral decoder.")
     st.markdown(
         f"SAE features learned on **{enc_label} layer {data['layer']}** activations. "
         "Each feature is a direction in embedding space; its **spectral signature** "
@@ -1090,7 +753,7 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
     def _expl(i: int, key: str, default=""):
         return feature_expls[i].get(key, default) if i < len(feature_expls) else default
 
-    # Derive dominant band from spectral decoder band deltas (always available)
+    # Derive dominant band from SpectralDecoder band deltas (always available)
     dominant_band = [
         band_names[int(np.argmax(np.abs(band_deltas[i])))]
         for i in range(n_features)
@@ -1264,7 +927,7 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
                 margin=dict(t=20, b=40, l=50, r=10),
                 legend=dict(orientation="h", y=-0.25),
             )
-            st.plotly_chart(_fig_ov, use_container_width=True)
+            st.plotly_chart(_fig_ov, width="stretch")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Section 1 — Real Patches
@@ -1313,7 +976,7 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
         for _i in range(1, _n+1):
             fig.update_xaxes(title_text="Time (s)", title_font=dict(size=10), row=1, col=_i)
         fig.update_layout(title=title, height=max(600, _C*22), margin=dict(l=70, r=10, t=60, b=40))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     if attn_cache is not None and chosen_idx < int(attn_cache["n_features"]):
         K_c          = int(attn_cache["K"])
@@ -1445,7 +1108,7 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
             height=320, margin=dict(t=10, b=40, l=50, r=10),
             legend=dict(x=0.7, y=0.95),
         )
-        st.plotly_chart(fig_spec, use_container_width=True)
+        st.plotly_chart(fig_spec, width="stretch")
 
     # ── Band powers + metadata enrichment (side by side) ─────────────────────
     _feat_meta_enr = _all_meta_enr
@@ -1473,7 +1136,7 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
             yaxis=dict(zeroline=True, zerolinewidth=1.5, zerolinecolor="grey"),
             font=dict(size=10),
         )
-        st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig_bar, width="stretch", config={"displayModeBar": False})
 
     def _vertical_enr_bar(cats_sorted: list, colors: list, title: str):
         _names = [c for c, _, _ in cats_sorted]
@@ -1522,7 +1185,7 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
             _clrs_age = [_age_cmap.get(c, "#aaaaaa") for c, _, _ in _cats_age_sorted]
             st.plotly_chart(
                 _vertical_enr_bar(_cats_age_sorted, _clrs_age, "Age group enrichment"),
-                use_container_width=True, config={"displayModeBar": False},
+                width="stretch", config={"displayModeBar": False},
             )
 
     if _has_sex:
@@ -1535,7 +1198,7 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
             _clrs_sex = [_sex_cmap.get(c, "#aaaaaa") for c, _, _ in _cats_sex]
             st.plotly_chart(
                 _vertical_enr_bar(_cats_sex, _clrs_sex, "Sex enrichment"),
-                use_container_width=True, config={"displayModeBar": False},
+                width="stretch", config={"displayModeBar": False},
             )
     st.caption("Enrichment = firing rate in group ÷ global firing rate  (×1 = baseline, ★ p < 0.05)")
 
@@ -1556,13 +1219,13 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
             title="Top co-occurring features (band-effect profile similarity)",
             height=260, margin=dict(t=40, b=30, l=40, r=10),
         )
-        st.plotly_chart(fig_co, use_container_width=True)
+        st.plotly_chart(fig_co, width="stretch")
 
     if chosen_idx in dash_imgs:
         with st.expander("Top-activating EEG windows (dashboard image)"):
             st.image(dash_imgs[chosen_idx],
                      caption=f"Feature F{chosen_idx} — top-activating windows",
-                     use_container_width=True)
+                     width="stretch")
 
     with st.expander("All features — sortable table"):
         import pandas as pd
@@ -1570,7 +1233,7 @@ def page_features(data: dict, app_cache: Optional[dict], folder_name: str, layer
             "idx": "Feature", "fire_rate": "Fire %", "corr": "r(label)",
             "p": "p-value", "band": "Dominant band", "description": "Description",
         })
-        st.dataframe(df.drop(columns=["cluster"]), use_container_width=True, height=400)
+        st.dataframe(df.drop(columns=["cluster"]), width="stretch", height=400)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1631,7 +1294,7 @@ def page_tcav_explorer(
     import pandas as pd
 
     st.title("TCAV Explorer")
-    st.caption("**Paper §4** — concept attribution via Testing with Concept Activation Vectors.")
+    st.caption("**§3.4.** Concept attribution with Testing with Concept Activation Vectors (TCAV).")
     enc_label = _ENCODER_LABELS.get(data["encoder"], data["encoder"].upper())
     st.markdown(
         f"**Testing with Concept Activation Vectors** — {enc_label} layer {data['layer']}. "
@@ -1831,7 +1494,7 @@ def page_tcav_explorer(
                 tbl_rows.append(row)
             st.dataframe(
                 pd.DataFrame(tbl_rows),
-                use_container_width=True,
+                width="stretch",
                 height=420,
                 hide_index=True,
             )
@@ -1953,7 +1616,7 @@ def page_tcav_explorer(
                 xaxis=dict(zeroline=True, zerolinewidth=1, zerolinecolor="grey"),
                 yaxis=dict(zeroline=True, zerolinewidth=1, zerolinecolor="grey"),
             )
-            st.plotly_chart(fig_ab, use_container_width=True)
+            st.plotly_chart(fig_ab, width="stretch")
             st.caption(caption)
 
     st.markdown("---")
@@ -1983,7 +1646,7 @@ def page_tcav_explorer(
                 row["TCAV p"]     = f"{mp:.3f}" if not _nan else "—"
                 row["Probe acc."] = f"{pa:.3f}" if not _nan else "—"
             summary_rows.append(row)
-        st.dataframe(pd.DataFrame(summary_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(summary_rows), width="stretch", hide_index=True)
         st.caption(
             "**CAV acc.** ≥ 0.65 = reliable; 0.55–0.65 = weak; ≤ 0.55 = chance.  "
             "**Model TCAV** = Kim et al. model-level score ([0,1], 0.5=chance); "
@@ -2056,7 +1719,7 @@ def page_tcav_explorer(
                 margin=dict(t=55, b=30, l=50, r=10),
                 yaxis=dict(zeroline=True, zerolinewidth=1.5, zerolinecolor="grey"),
             )
-            st.plotly_chart(fig_band_bar, use_container_width=True)
+            st.plotly_chart(fig_band_bar, width="stretch")
 
         with col_b:
             # If abnormality available: scatter band-score vs abnormality-score
@@ -2091,7 +1754,7 @@ def page_tcav_explorer(
                     xaxis=dict(zeroline=True, zerolinewidth=1, zerolinecolor="grey"),
                     yaxis=dict(zeroline=True, zerolinewidth=1, zerolinecolor="grey"),
                 )
-                st.plotly_chart(fig_cross, use_container_width=True)
+                st.plotly_chart(fig_cross, width="stretch")
                 st.caption(
                     f"Top-right = features selective for both **{chosen_band}** "
                     "and **abnormality** — candidate pathological signatures."
@@ -2111,7 +1774,7 @@ def page_tcav_explorer(
                     height=360, margin=dict(t=50, b=50, l=60, r=10),
                     xaxis=dict(zeroline=True, zerolinewidth=1, zerolinecolor="grey"),
                 )
-                st.plotly_chart(fig_bscat, use_container_width=True)
+                st.plotly_chart(fig_bscat, width="stretch")
 
         # ── Feature × concept heatmap (all concepts, top features) ───
         with st.expander("Feature × concept heatmap"):
@@ -2142,7 +1805,7 @@ def page_tcav_explorer(
                     margin=dict(t=10, b=60, l=90, r=10),
                     xaxis=dict(tickangle=-45, tickfont=dict(size=9)),
                 )
-                st.plotly_chart(fig_heat, use_container_width=True)
+                st.plotly_chart(fig_heat, width="stretch")
 
         # ── Concept comparison ────────────────────────────────────────
         with st.expander("Compare two concepts"):
@@ -2177,7 +1840,7 @@ def page_tcav_explorer(
                 height=320, margin=dict(t=50, b=30, l=60, r=10),
                 yaxis=dict(zeroline=True, zerolinewidth=1.5, zerolinecolor="grey"),
             )
-            st.plotly_chart(fig_cmp, use_container_width=True)
+            st.plotly_chart(fig_cmp, width="stretch")
             st.caption(
                 f"Positive = more aligned with **{concept_a}**.  "
                 f"Negative = more aligned with **{concept_b}**."
@@ -2218,11 +1881,53 @@ _GRAN_LABEL_NAMES = {
     -1: "Unknown"
 }
 
+# Sleep stage colours (Wong palette subset, colourblind-safe)
+_SLEEP_STAGE_COLORS: Dict[str, str] = {
+    "Wake":      "#E69F00",   # amber
+    "N1":        "#56B4E9",   # sky blue
+    "N2":        "#0072B2",   # deep blue
+    "N3":        "#009E73",   # teal
+    "REM":       "#CC79A7",   # pink/purple
+    "Move":      "#95a5a6",   # grey
+    "Unscored":  "#7f8c8d",   # dark grey
+    "Unknown":   "#aaaaaa",
+}
+_SLEEP_STAGE_ORDER = ["Wake", "N1", "N2", "N3", "REM", "Move", "Unscored", "Unknown"]
+
+# AHI (apnea-hypopnea index) is a continuous events/hour value. Bin it into the
+# standard AASM clinical OSA-severity categories so the Layer Explorer colours by
+# meaningful groups instead of ~1,300 distinct float values.
+#   Normal <5 · Mild 5–15 · Moderate 15–30 · Severe ≥30
+_AHI_ORDER = ["Normal (<5)", "Mild (5–15)", "Moderate (15–30)", "Severe (≥30)", "unknown"]
+_AHI_COLORS = {
+    "Normal (<5)":      "#1a9850",  # green
+    "Mild (5–15)":      "#fee08b",  # yellow
+    "Moderate (15–30)": "#fc8d59",  # orange
+    "Severe (≥30)":     "#d73027",  # red
+    "unknown":          "#999999",  # grey
+}
+
+
+def _ahi_category(value: Any) -> str:
+    """Map a raw AHI value to its AASM clinical severity bin."""
+    try:
+        ahi = float(value)
+    except (TypeError, ValueError):
+        return "unknown"
+    if ahi < 5:
+        return "Normal (<5)"
+    if ahi < 15:
+        return "Mild (5–15)"
+    if ahi < 30:
+        return "Moderate (15–30)"
+    return "Severe (≥30)"
+
 
 @st.cache_data(show_spinner=False, hash_funcs={dict: id})
 def _make_animation_figure(
     cache: dict, color_by: str, token_meta: Optional[Dict[str, Any]] = None,
     highlight: Optional[str] = None,
+    umap_label: str = "Joint UMAP",
 ) -> go.Figure:
     """Build a Plotly animated scatter — one frame per encoder layer."""
     layers  = cache["layers"]
@@ -2278,6 +1983,42 @@ def _make_animation_figure(
         point_labels = [str(int(c)) for c in cluster_labels]
         colors = [pal[int(c) % len(pal)] for c in cluster_labels]
         legend_entries = {f"Cluster {i}": pal[i % len(pal)] for i in range(n_cl)}
+
+    elif color_by == "sleep_stage_name" and "sleep_stage_name" in token_meta:
+        raw_vals = token_meta["sleep_stage_name"]
+        point_labels = [str(v) for v in raw_vals]
+        colors = [_SLEEP_STAGE_COLORS.get(lb, "#aaaaaa") for lb in point_labels]
+        present = set(point_labels)
+        legend_entries = {s: _SLEEP_STAGE_COLORS[s] for s in _SLEEP_STAGE_ORDER if s in present and s in _SLEEP_STAGE_COLORS}
+
+    elif color_by == "micro_events" and "micro_events" in token_meta:
+        _EV_COLORS = {
+            "spindle":        "#009E73",  # teal
+            "slow_wave":      "#0072B2",  # deep blue
+            "eye_movement":   "#CC79A7",  # pink/purple
+            "arousal":        "#D55E00",  # vermilion
+            "apnea_oa":       "#E69F00",  # amber
+            "apnea_ca":       "#F0E442",  # yellow
+            "apnea_hypopnea": "#56B4E9",  # sky blue
+            "desaturation":   "#999999",  # grey
+            "multiple":       "#ffffff",  # white (multiple events)
+            "none":           "#333333",  # dark grey
+        }
+        _EV_ORDER = ["spindle", "slow_wave", "eye_movement", "arousal",
+                     "apnea_oa", "apnea_ca", "apnea_hypopnea", "desaturation",
+                     "multiple", "none"]
+        raw_vals = token_meta["micro_events"]
+        point_labels = [str(v) for v in raw_vals]
+        colors = [_EV_COLORS.get(lb, "#aaaaaa") for lb in point_labels]
+        present = set(point_labels)
+        legend_entries = {e: _EV_COLORS[e] for e in _EV_ORDER if e in present}
+
+    elif color_by == "ahi_a0h3a" and "ahi_a0h3a" in token_meta:
+        # Bin continuous AHI into ordered AASM severity categories
+        point_labels = [_ahi_category(v) for v in token_meta["ahi_a0h3a"]]
+        colors = [_AHI_COLORS.get(lb, "#888888") for lb in point_labels]
+        present = set(point_labels)
+        legend_entries = {c: _AHI_COLORS[c] for c in _AHI_ORDER if c in present}
 
     elif color_by in token_meta:
         raw_vals = token_meta[color_by]
@@ -2398,7 +2139,7 @@ def _make_animation_figure(
     )
 
     fig.update_layout(
-        title=f"{cache['display_name']} — Joint UMAP across layers",
+        title=f"{cache['display_name']} — {umap_label} across layers",
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, title="UMAP-1",
                    range=x_range),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, title="UMAP-2",
@@ -2444,7 +2185,7 @@ def _make_animation_figure(
                         mode="immediate",
                         transition=dict(duration=400, easing="cubic-in-out"),
                     )],
-                    label="Tokenizer" if L == -1 else str(L),
+                    label=cache.get("layer_labels", {}).get(L, "Tokenizer" if L == -1 else str(L)),
                     method="animate",
                 )
                 for L in layers
@@ -2452,63 +2193,6 @@ def _make_animation_figure(
         )],
     )
     return fig
-
-
-@st.cache_data(show_spinner=False)
-def _load_spectral_decoder_comparison_metrics() -> Optional[dict]:
-    """Load the JSON produced by compare_spectral_decoder.py, or None if not yet built."""
-    p = ROOT / "results" / "spectral_decoder" / "spectral_decoder_comparison_metrics.json"
-    if not p.exists():
-        return None
-    with open(p) as f:
-        return json.load(f)
-
-
-@st.cache_data(show_spinner=False)
-def _load_all_tcav_caches_for_comparison() -> dict:
-    """
-    Scan results/tcav/ and load model_tcav_scores + cav_accuracies from every
-    available cache.  Returns {exp_name: {...}} keyed by experiment directory name.
-    """
-    tcav_root = ROOT / "results" / "tcav"
-    data: dict = {}
-    if not tcav_root.exists():
-        return data
-    for exp_dir in sorted(tcav_root.iterdir()):
-        cache_p = exp_dir / "tcav_cache.pt"
-        if not cache_p.exists():
-            continue
-        try:
-            cache = torch.load(str(cache_p), map_location="cpu", weights_only=False)
-            model_tcav = cache.get("model_tcav_scores")
-            if model_tcav is None:
-                continue
-            concept_names = list(cache.get("concept_names", []))
-            cav_acc       = cache.get("cav_accuracies")
-            probe_acc     = cache.get("probe_accuracies")
-            data[exp_dir.name] = {
-                "concept_names":     concept_names,
-                "model_tcav_scores": (model_tcav.tolist() if torch.is_tensor(model_tcav)
-                                      else list(model_tcav)),
-                "cav_accuracies":    (cav_acc.tolist() if torch.is_tensor(cav_acc)
-                                      else list(cav_acc)) if cav_acc is not None else None,
-                "probe_accuracies":  (probe_acc.tolist() if torch.is_tensor(probe_acc)
-                                      else list(probe_acc)) if probe_acc is not None else None,
-            }
-        except Exception:
-            continue
-    return data
-
-
-def _exp_name_to_encoder_layer(exp_name: str):
-    """Parse 'sleepfm_v2.4_layer5' → ('sleepfm_v2.4', 5)."""
-    try:
-        parts = exp_name.rsplit("_layer", 1)
-        enc   = parts[0]
-        layer = int(parts[1])
-        return enc, layer
-    except (IndexError, ValueError):
-        return exp_name, -1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2702,7 +2386,7 @@ def _render_tokenizer_clusters(cache: dict, k: int) -> None:
                     _ann.font = dict(size=10, color="#aaaaaa")
                     _ann.x = 0
                     _ann.xanchor = "left"
-                st.plotly_chart(_fig_meta, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(_fig_meta, width="stretch", config={"displayModeBar": False})
 
         with col_wave:
             idxs = np.where(mask)[0]
@@ -2747,7 +2431,7 @@ def _render_tokenizer_clusters(cache: dict, k: int) -> None:
                 font=dict(color="#fafafa"),
                 showlegend=False,
             )
-            st.plotly_chart(fig_w, use_container_width=True)
+            st.plotly_chart(fig_w, width="stretch")
         st.divider()
 
 
@@ -2755,62 +2439,30 @@ def _render_tokenizer_clusters(cache: dict, k: int) -> None:
 # Taxonomy & Steering — paper figures (with one interactive panel)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_PAPER_FIG_DIR = ROOT / "tools" / "paper_figures"
-
-
-def _show_paper_image(rel_dir: str, caption: str) -> None:
-    p = _PAPER_FIG_DIR / rel_dir / "figure.png"
+def _show_paper_image(fname: str, caption: str) -> None:
+    p = _PAPER_STATIC / fname
     if p.exists():
-        st.image(str(p), use_container_width=True, caption=caption)
+        st.image(str(p), width="stretch", caption=caption)
     else:
         st.info(f"`{p.relative_to(ROOT)}` not found.")
 
 
-@st.cache_data(show_spinner="Loading steering-curve data …")
-def _load_steering_curves_data() -> Dict[Tuple[str, str], dict]:
-    """Load Figure 5 data — returns {(concept, experiment) → entry-dict}."""
-    p = _PAPER_FIG_DIR / "Figure 5" / "data.npz"
-    if not p.exists():
-        return {}
-    raw = np.load(p, allow_pickle=True)
-    out: Dict[Tuple[str, str], dict] = {}
-    for k in raw.files:
-        e = json.loads(str(raw[k]))
-        out[(e["concept"], e["experiment"])] = e
-    return out
+@st.cache_resource(show_spinner=False)
+def _load_seeded_steering() -> Dict[str, dict]:
+    """Seeded steering sweeps behind Figures 4–5: {experiment: {layer, cells[]}}.
+
+    Each cell is one (concept, SAE seed) sweep. Built from
+    tools/paper_figures/Figure 5/data.json in the release repo.
+    """
+    p = _PAPER_STATIC / "steering_seeded.json"
+    return json.loads(p.read_text()) if p.exists() else {}
 
 
-_EXP_RE_SLEEPFM = re.compile(r"^sleepfm_finetuned(?:_exp(\d+))?_layer(\d+)$")
-_EXP_RE_LABRAM  = re.compile(r"^labram_layer(\d+)(?:_exp(\d+))?$")
-_EXP_RE_REVE    = re.compile(r"^reve_qjbe08(?:_exp(\d+))?_layer(\d+)$")
-
-
-def _parse_experiment(exp: str) -> Optional[Tuple[str, int, int]]:
-    """Parse experiment name into (family, expansion, layer_0idx)."""
-    if exp.endswith("_multi"):
-        return None
-    m = _EXP_RE_SLEEPFM.match(exp)
-    if m:
-        E = int(m.group(1)) if m.group(1) else 1
-        return ("SleepFM", E, int(m.group(2)))
-    m = _EXP_RE_LABRAM.match(exp)
-    if m:
-        E = int(m.group(2)) if m.group(2) else 1
-        return ("LaBraM", E, int(m.group(1)))
-    m = _EXP_RE_REVE.match(exp)
-    if m:
-        E = int(m.group(1)) if m.group(1) else 1
-        return ("REVE", E, int(m.group(2)))
-    return None
-
-
-@st.cache_data(show_spinner="Loading taxonomy data …")
+@st.cache_resource(show_spinner=False)
 def _load_taxonomy_data() -> Dict[str, dict]:
-    """Load Figure 3 data — {exp_name: {separable, entangled, dead}}."""
-    p = _PAPER_FIG_DIR / "Figure 3" / "data.json"
-    if not p.exists():
-        return {}
-    return json.loads(p.read_text())
+    """Figure 3 data: {exp_name: {separable, entangled, dead}}."""
+    p = _PAPER_STATIC / "taxonomy.json"
+    return json.loads(p.read_text()) if p.exists() else {}
 
 
 _TAXONOMY_ENCODERS = [
@@ -2823,278 +2475,179 @@ _TAXONOMY_ENCODERS = [
 ]
 _TAXONOMY_EXPANSIONS = [1, 2, 4, 8, 16, 32, 64]
 _TAXONOMY_METRICS = {
-    "Separable": ("separable", "Greens", "Fraction of concept-enriched SAE features that respond to one and only one concept."),
-    "Entangled": ("entangled", "Oranges", "Fraction sharing one neural primitive across multiple labels (e.g. age + pathology via δ/θ)."),
-    "Dead":      ("dead",      "Reds",    "Fraction of SAE features that never fire — capacity-limited."),
+    "Separable": ("separable", "Greens", "Share of concept-enriched features that respond to exactly one concept."),
+    "Entangled": ("entangled", "Oranges", "Share of features that respond to several concepts (e.g. age and pathology via δ/θ)."),
+    "Dead":      ("dead",      "Reds",    "Share of features that never carry concept information."),
 }
 
 
 def _render_taxonomy_subtab() -> None:
     st.markdown(
-        "**Figure 3 (§3.3)** — fraction of concept-enriched SAE features in each of three taxonomy classes "
-        "(Separable / Entangled / Dead), across layers × expansion factors, per encoder. "
-        "Hover any cell to see exact values. Hatched cells = no SAE trained at that (ℓ, E)."
+        "**Figure 3 (§4.3).** Fraction of concept-enriched SAE features in each taxonomy class, "
+        "by layer and expansion, for each encoder. Hover a cell for its value; blank cells had no SAE trained."
     )
-
     taxonomy = _load_taxonomy_data()
     if not taxonomy:
-        st.info("`tools/paper_figures/Figure 3/data.json` not found.")
+        st.info("Taxonomy data not found.")
         return
 
-    metric_name = st.radio(
-        "Metric",
-        list(_TAXONOMY_METRICS.keys()),
-        horizontal=True,
-        key="taxonomy_metric",
-        help=" · ".join(f"**{k}** — {v[2]}" for k, v in _TAXONOMY_METRICS.items()),
-    )
+    metric_name = st.segmented_control(
+        "Metric", list(_TAXONOMY_METRICS), default="Separable", key="taxonomy_metric",
+    ) or "Separable"
     field, cmap, blurb = _TAXONOMY_METRICS[metric_name]
     st.caption(blurb)
 
-    n_enc = len(_TAXONOMY_ENCODERS)
-    cols = st.columns(n_enc, gap="medium")
+    cols = st.columns(len(_TAXONOMY_ENCODERS), gap="medium")
     for col, cfg in zip(cols, _TAXONOMY_ENCODERS):
-        with col:
-            layers = cfg["layers"]
-            Es     = _TAXONOMY_EXPANSIONS
-            mat    = np.full((len(layers), len(Es)), np.nan)
-            for i, L in enumerate(layers):
-                for j, E in enumerate(Es):
-                    entry = taxonomy.get(cfg["exp_for"](L, E))
-                    if entry is not None:
-                        mat[i, j] = entry.get(field, np.nan) * 100.0
-            hover_text = [[f"L{L} · E={E}<br>{metric_name}: {mat[i,j]:.1f}%"
-                           if not np.isnan(mat[i,j]) else f"L{L} · E={E}<br>no SAE trained"
-                           for j, E in enumerate(Es)] for i, L in enumerate(layers)]
-            fig = go.Figure(data=go.Heatmap(
-                z=mat,
-                x=[f"{E}×" for E in Es],
-                y=[f"L{L}" for L in layers],
-                colorscale=cmap,
-                zmin=0, zmax=100,
-                hoverinfo="text",
-                text=hover_text,
-                colorbar=dict(title=dict(text="%", side="right"), tickformat=".0f", thickness=10),
-            ))
-            fig.update_layout(
-                title=f"<b>{cfg['name']}</b>",
-                height=max(220, 32 * len(layers) + 110),
-                margin=dict(l=40, r=10, t=40, b=40),
-                xaxis_title="Expansion",
-                yaxis_title="Layer",
-                yaxis=dict(autorange="reversed"),
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        layers, Es = cfg["layers"], _TAXONOMY_EXPANSIONS
+        mat = np.full((len(layers), len(Es)), np.nan)
+        for i, L in enumerate(layers):
+            for j, E in enumerate(Es):
+                entry = taxonomy.get(cfg["exp_for"](L, E))
+                if entry is not None:
+                    mat[i, j] = entry.get(field, np.nan) * 100.0
+        hover = [[f"L{L + 1} · E={E}<br>{metric_name}: {mat[i, j]:.1f}%"
+                  if not np.isnan(mat[i, j]) else f"L{L + 1} · E={E}<br>no SAE trained"
+                  for j, E in enumerate(Es)] for i, L in enumerate(layers)]
+        fig = go.Figure(go.Heatmap(
+            z=mat, x=[f"{E}×" for E in Es], y=[f"L{L + 1}" for L in layers],
+            colorscale=cmap, zmin=0, zmax=100, hoverinfo="text", text=hover,
+            colorbar=dict(title=dict(text="%", side="right"), tickformat=".0f", thickness=10),
+        ))
+        fig.update_layout(
+            title=f"<b>{cfg['name']}</b>", height=max(220, 32 * len(layers) + 110),
+            margin=dict(l=40, r=10, t=40, b=40), xaxis_title="Expansion", yaxis_title="Layer",
+            yaxis=dict(autorange="reversed"),
+        )
+        col.plotly_chart(fig, width="stretch")
 
-    with st.expander("Show paper Figure 3 (static composite)"):
-        _show_paper_image("Figure 3", "Figure 3 — Monosemanticity taxonomy (paper composite)")
-
-    st.markdown("---")
-    st.markdown(
-        "**Figure 2 (§3.2)** — SAE-faithfulness layer sweep. Test AUROC of a linear probe trained on "
-        "mean-pooled embeddings as layer-ℓ activations are replaced by their TopK-SAE reconstructions."
-    )
-    _show_paper_image("Figure 2", "Figure 2 — SAE-faithfulness layer sweep")
+    with st.expander("Paper Figure 3 (static)"):
+        _show_paper_image("fig3_taxonomy.png", "Figure 3. Monosemanticity taxonomy across expansion and depth.")
+    with st.expander("Paper Figure 2: SAE faithfulness at every layer"):
+        _show_paper_image(
+            "fig2_faithfulness.png",
+            "Figure 2. Probe AUROC with layer-ℓ activations replaced by SAE reconstructions (5-fold CV).",
+        )
 
 
 def _render_steering_static_subtab() -> None:
-    st.markdown(
-        "**Figure 4 (§5)** — per-encoder, per-layer encoding strength (top row) and steering selectivity (bottom row) "
-        "for six clinical concepts (Age, Pathology, Sex, Epileptic Activity, ASM medication, Psychiatric medication)."
+    _show_paper_image(
+        "fig4_steering.png",
+        "Figure 4 (§4.4). Encoding strength AUROC₀ (top) and excess selectivity Δ̃ (bottom), "
+        "E=1, k=8, mean ± sd over 5 SAE seeds; dots mark cells selective in ≥3/5 seeds.",
     )
-    _show_paper_image("Figure 4", "Figure 4 — Cross-model concept encoding & steering selectivity")
+    st.divider()
+    _show_paper_image(
+        "fig5_curves.png",
+        "Figure 5. Nine representative steering sweeps across the encoding × selectivity landscape.",
+    )
+    st.divider()
+    _show_paper_image(
+        "fig6_spectral.png",
+        "Figure 6 (§4.5). Spectrum-level steering, abnormal → normal, SleepFM L3 (E=8, k=64): "
+        "clamping the top n = 104 and 164 TCAV-aligned features.",
+    )
 
-    st.markdown("---")
-    st.markdown(
-        "**Figure 6 (§6)** — spectrum-level concept steering on SleepFM L2 (E=8). Decoded spectrum after "
-        "clamping the top *n* TCAV-aligned features to the normal-class centroid."
-    )
-    _show_paper_image("Figure 6", "Figure 6 — Spectrum-level concept steering")
+
+_STEER_FAMILIES = [
+    ("SleepFM", "sleepfm_finetuned_layer"),
+    ("LaBraM",  "labram_layer"),
+    ("REVE",    "reve_qjbe08_layer"),
+]
+_STEER_CONCEPTS = [
+    ("Pathology", "Abnormality"), ("Age", "Age"), ("Gender", "Sex"),
+    ("Medication (Psychiatric)", "Medication (psychiatric)"), ("Medication (ASM)", "Medication (ASM)"),
+]
+_SEL_P, _SEL_MIN = 0.05, 0.05
 
 
 def _render_steering_curves_subtab() -> None:
     st.markdown(
-        "**Figure 5 (§5)** — interactive variant. Pick encoder family, expansion ratio, layer, and target concept. "
-        "**Red** curve = target-concept AUROC, **blue** = Pathology (off-target), grey dotted = random-direction "
-        "baseline. AUROC at *f=0* tells you how well the concept is *encoded*; the gap between target and "
-        "off-target curves (vs the random baseline) tells you how *selectively* it can be steered."
+        "Pick any cell of Figure 4 to see its steering sweep. **Red**: target-concept AUROC; "
+        "**blue**: off-target AUROC (age when the target is abnormality, otherwise abnormality); "
+        "dotted: mean of 200 random feature rankings. Shading is ± 1 sd over 5 SAE seeds."
     )
-    data = _load_steering_curves_data()
+    data = _load_seeded_steering()
     if not data:
-        st.info("Figure 5 data not found at `tools/paper_figures/Figure 5/data.npz`.")
+        st.info("Seeded steering data not found.")
         return
 
-    parsed: Dict[str, Tuple[str, int, int]] = {}
-    for _, exp in data.keys():
-        if exp not in parsed:
-            p = _parse_experiment(exp)
-            if p is not None:
-                parsed[exp] = p
+    c1, c2, c3 = st.columns([1, 1, 1.6])
+    fam_names = [f for f, _ in _STEER_FAMILIES]
+    family = c1.selectbox("Encoder", fam_names, key="steer_family")
+    prefix = dict(_STEER_FAMILIES)[family]
+    exps = sorted((v["layer"], e) for e, v in data.items() if e.startswith(prefix))
+    layer_idx = c2.selectbox("Layer", [L for L, _ in exps], format_func=lambda L: f"L{L + 1}",
+                             index=len(exps) - 1, key=f"steer_layer_{family}")
+    exp = dict(exps)[layer_idx]
+    concept = c3.selectbox("Target concept", [c for c, _ in _STEER_CONCEPTS],
+                           format_func=dict(_STEER_CONCEPTS).get, key="steer_concept")
+    off_name = "Age" if concept == "Pathology" else "Abnormality"
 
-    concepts = sorted({c for c, _ in data})
-    families = [f for f in ("SleepFM", "LaBraM", "REVE")
-                if any(v[0] == f for v in parsed.values())]
-
-    col_f, col_e, col_l, col_c = st.columns([1.2, 1.2, 1.2, 1.6])
-    with col_f:
-        family = st.selectbox("Encoder", families, key="steering_curves_family")
-    exps_in_family = {exp: (E, L) for exp, (fam, E, L) in parsed.items() if fam == family}
-    available_E = sorted({E for E, _ in exps_in_family.values()})
-    with col_e:
-        E_sel = st.selectbox("Expansion E", available_E, key="steering_curves_E", index=0)
-    available_L = sorted({L for exp, (E, L) in exps_in_family.items() if E == E_sel})
-    with col_l:
-        L_sel = st.selectbox("Layer (0-indexed)", available_L, key="steering_curves_L", index=0)
-
-    experiment = next((exp for exp, (E, L) in exps_in_family.items()
-                       if E == E_sel and L == L_sel), None)
-
-    # Concept selector: greyed-out labels for concepts without data at this config.
-    ordered = [c for c in ("Age", "Pathology", "Gender",
-                           "Medication (ASM)", "Medication (Psychiatric)") if c in concepts]
-    controls = [c for c in concepts if c not in ordered]
-    all_concepts = ordered + controls
-    available_here = {c for c in all_concepts if experiment is not None and (c, experiment) in data}
-
-    def _label(c: str) -> str:
-        return c if c in available_here else f"{c} — not run for this config"
-
-    with col_c:
-        concept = st.selectbox(
-            "Concept (target)",
-            all_concepts,
-            format_func=_label,
-            key="steering_curves_concept",
-        )
-
-    if experiment is None:
-        st.info("No data for this configuration.")
+    cells = [c for c in data[exp]["cells"] if c["concept"] == concept]
+    if not cells:
+        st.info("This cell was not run.")
         return
 
-    entry = data.get((concept, experiment))
-    if entry is None:
-        # Coverage hint: which configs DO have this concept?
-        with_concept = sorted({exp for c, exp in data.keys() if c == concept})
-        in_family = [exp for exp in with_concept if parsed.get(exp, (None,))[0] == family]
-        st.warning(
-            f"**`{concept}`** has not been run for **{family} · L{L_sel} · E={E_sel}**. "
-            f"Across all encoders, {len(with_concept)}/{len(parsed)} configs have it; "
-            f"within {family}, {len(in_family)}/{sum(1 for v in parsed.values() if v[0]==family)} do."
-        )
-        st.caption(
-            "**Coverage note:** *Age* was run on every (encoder × layer × expansion). "
-            "*Pathology*, *Gender*, *Medication (ASM)* and *Medication (Psychiatric)* were only run on the "
-            "primary-expansion configs plus a handful of higher-E variants — the rest would need a fresh "
-            "steering pass against the per-token labels."
-        )
-        return
+    fr = np.asarray(cells[0]["fracs"], dtype=float)
+    stack = lambda key: np.asarray([c[key] for c in cells], dtype=float)  # noqa: E731
+    tgt, off = stack("tgt_auc"), stack("off_auc")
+    ntgt, noff = stack("null_tgt_auc_mean"), stack("null_off_auc_mean")
+    ex = np.asarray([c["excess_delta"] for c in cells])
+    a0 = np.asarray([c["auroc0"] for c in cells])
+    n_sel = sum(1 for c in cells if c["p_value"] < _SEL_P and c["excess_delta"] >= _SEL_MIN)
+    sd = lambda x: float(x.std(ddof=1)) if len(x) > 1 else 0.0  # noqa: E731
 
-    fracs    = np.asarray(entry["fracs"], dtype=float)
-    tgt_auc  = np.asarray(entry["tgt_auc"], dtype=float)
-    off_auc  = np.asarray(entry["off_auc"], dtype=float)
-    rand_tgt = np.asarray(entry.get("rand_tgt_auc_mean", []), dtype=float)
-    rand_off = np.asarray(entry.get("rand_off_auc_mean", []), dtype=float)
-
-    # ── Headline metrics (AUROC₀ + excess steerability) ────────────────────────
-    boot_tgt0 = np.asarray(entry.get("bootstrap_tgt_auc0", []), dtype=float)
-    auroc0      = float(boot_tgt0.mean()) if boot_tgt0.size else float(tgt_auc[0])
-    auroc0_std  = float(boot_tgt0.std(ddof=1)) if boot_tgt0.size > 1 else 0.0
-
-    ba = np.asarray(entry.get("bootstrap_areas", []), dtype=float)
-    br = np.asarray(entry.get("bootstrap_rand_areas", []), dtype=float)
-    if ba.size and ba.size == br.size:
-        excess_mean = float((ba - br).mean())
-        excess_std  = float((ba - br).std(ddof=1)) if ba.size > 1 else 0.0
+    if a0.mean() < 0.70:
+        regime = "Weakly encoded"
+    elif n_sel >= 0.6 * len(cells):
+        regime = "Selectively steerable"
     else:
-        area      = float(entry.get("area", 0.0))
-        rand_area = float(entry.get("rand_area_mean", 0.0))
-        excess_mean = area - rand_area
-        excess_std  = float(entry.get("rand_area_std", 0.0))
+        regime = "Encoded but entangled"
 
     m1, m2, m3 = st.columns(3)
-    with m1:
-        st.metric(
-            "AUROC₀ — concept encoding strength",
-            f"{auroc0:.3f}",
-            delta=f"± {auroc0_std:.3f}" if auroc0_std > 0 else None,
-            delta_color="off",
-            help="Target-concept linear-probe AUROC at clamping fraction f=0 (no intervention). "
-                 "Bootstrap mean ± std across resamples of the probed token set.",
-        )
-    with m2:
-        sign = "+" if excess_mean >= 0 else ""
-        st.metric(
-            "Excess steerability",
-            f"{sign}{excess_mean:.3f}",
-            delta=f"± {excess_std:.3f}" if excess_std > 0 else None,
-            delta_color="off",
-            help="(target − off-target) AUROC area swept across f, minus the random-direction baseline. "
-                 "Positive = concept can be steered more than a random direction; near-zero = entangled.",
-        )
-    with m3:
-        st.metric(
-            "Sample size",
-            f"{entry.get('n_target_per_group', '?')} / group",
-            delta=f"{entry.get('n_features', '?')} SAE features",
-            delta_color="off",
-            help="Tokens per group used for the AUROC computation, and SAE dictionary size.",
-        )
+    m1.metric("AUROC₀ (encoding)", f"{a0.mean():.3f} ± {sd(a0):.3f}")
+    m2.metric("Excess selectivity Δ̃", f"{ex.mean():+.3f} ± {sd(ex):.3f}")
+    m3.metric("Regime", regime, help=f"Selective in {n_sel}/{len(cells)} seeds "
+              f"(p < {_SEL_P} against random rankings and Δ̃ ≥ {_SEL_MIN}).")
 
     fig = go.Figure()
-    if rand_tgt.size == fracs.size:
-        fig.add_scatter(x=fracs, y=rand_tgt, mode="lines", name="random — target",
-                        line=dict(color="#bbbbbb", dash="dot", width=1))
-    if rand_off.size == fracs.size:
-        fig.add_scatter(x=fracs, y=rand_off, mode="lines", name="random — Pathology",
-                        line=dict(color="#888888", dash="dot", width=1))
-    fig.add_scatter(x=fracs, y=tgt_auc, mode="lines+markers",
-                    name=f"{concept} (target)",
-                    line=dict(color="#c0392b", width=2.5))
-    fig.add_scatter(x=fracs, y=off_auc, mode="lines+markers",
-                    name="Pathology (off-target)",
-                    line=dict(color="#1f6fb4", width=2.5))
+    for arr, color, name in [(tgt, "192,57,43", f"{dict(_STEER_CONCEPTS)[concept]} (target)"),
+                             (off, "31,111,180", f"{off_name} (off-target)")]:
+        mu, s = arr.mean(0), arr.std(0, ddof=1) if len(arr) > 1 else np.zeros_like(fr)
+        fig.add_scatter(x=np.r_[fr, fr[::-1]], y=np.r_[mu + s, (mu - s)[::-1]], fill="toself",
+                        fillcolor=f"rgba({color},0.15)", line=dict(width=0),
+                        hoverinfo="skip", showlegend=False)
+        fig.add_scatter(x=fr, y=mu, mode="lines", name=name, line=dict(color=f"rgb({color})", width=2.5))
+    fig.add_scatter(x=fr, y=ntgt.mean(0), mode="lines", name="random: target",
+                    line=dict(color="rgb(192,57,43)", dash="dot", width=1))
+    fig.add_scatter(x=fr, y=noff.mean(0), mode="lines", name="random: off-target",
+                    line=dict(color="rgb(31,111,180)", dash="dot", width=1))
     fig.update_layout(
-        height=460,
-        xaxis_title="Clamping fraction f",
-        yaxis_title="AUROC",
+        height=440, xaxis_title="Clamping fraction f", yaxis_title="Probe AUROC",
+        yaxis=dict(range=[min(0.4, float(np.min([tgt.min(), off.min()])) - 0.05), 1.0]),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        margin=dict(l=50, r=20, t=70, b=50),
+        margin=dict(l=50, r=20, t=40, b=50),
     )
-    fig.update_yaxes(range=[0.0, 1.0])
-    fig.add_annotation(
-        text=f"<b>{family} · layer {L_sel} · E={E_sel}</b> &nbsp;·&nbsp; target = {concept}",
-        xref="paper", yref="paper", x=0.5, y=1.18,
-        showarrow=False, font=dict(size=14),
-        xanchor="center",
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 def page_taxonomy_steering() -> None:
-    """Paper-aligned Taxonomy & Steering figures with one interactive panel."""
     st.title("Taxonomy & Steering")
-    st.caption(
-        "**Paper §3.2 · Fig 2 + §3.3 · Fig 3 + §5–6 · Figs 4 / 5 / 6** — the paper's quantitative figures, "
-        "with an interactive variant of Figure 5."
-    )
-    tab_tax, tab_steer, tab_curves = st.tabs([
-        "Taxonomy",
-        "Steering (paper figures)",
-        "Steering curves (interactive)",
-    ])
-    with tab_tax:
-        _render_taxonomy_subtab()
-    with tab_steer:
-        _render_steering_static_subtab()
+    st.caption("The paper's quantitative results (§4.3–4.5, Figs. 2–6) with every steering sweep explorable.")
+    tab_curves, tab_steer, tab_tax = st.tabs(["Steering curves", "Paper figures", "Taxonomy"])
     with tab_curves:
         _render_steering_curves_subtab()
-
+    with tab_steer:
+        _render_steering_static_subtab()
+    with tab_tax:
+        _render_taxonomy_subtab()
 
 
 def page_layer_explorer(folder_name: str) -> None:
     """Layer Explorer — animated joint UMAP showing token trajectories across layers."""
     st.header("Layer Explorer")
-    st.caption("**Paper §3** — animated joint UMAP showing token trajectories across encoder layers.")
+    st.caption("**Supplementary.** Animated joint UMAP of token trajectories across encoder layers.")
     st.caption(
         "Animated joint UMAP: the same tokens appear at every layer in a shared "
         "coordinate space, so you can see how representations evolve with depth.  "
@@ -3102,39 +2655,136 @@ def page_layer_explorer(folder_name: str) -> None:
     )
 
     umap_dir  = ROOT / "results" / "layer_umap"
-    cache_path = umap_dir / folder_name / "umap_cache.pt"
+
+    # `*_local/` folders hold E=1 re-trainings of the same encoder; the layer
+    # UMAP depends only on the encoder, so fall back to the canonical folder.
+    actual_folder = folder_name
+    if not (umap_dir / actual_folder / "umap_cache.pt").exists():
+        actual_folder = _SPECTRAL_DECODER_CANONICAL.get(folder_name, folder_name)
+
+    cache_path = umap_dir / actual_folder / "umap_cache.pt"
 
     if not cache_path.exists():
         if _show_build_hints():
             st.info(
-                f"No layer UMAP cache found for **{folder_name}**.  Build it with:\n\n"
-                f"```\nuv run tools/build_layer_umap_cache.py --encoder {folder_name}\n```\n\n"
-                f"Cache will be saved to `results/layer_umap/{folder_name}/umap_cache.pt`."
+                f"No layer UMAP cache found for **{actual_folder}**.  Build it with:\n\n"
+                f"```\nuv run tools/build_layer_umap_cache.py --encoder {actual_folder}"
+                f" --max-tokens 5000 --max-per-subject 3 --equalize-stages --add-perlayer\n```\n\n"
+                f"Cache will be saved to `results/layer_umap/{actual_folder}/umap_cache.pt`."
             )
         else:
             st.info(
                 "Layer UMAP isn't built for this encoder. Pick **SleepFM** in the sidebar "
-                "for the canonical animated layer trajectory used in §3 of the paper."
+                "for the animated layer trajectory."
             )
         return
 
     cache = load_layer_umap_cache(str(cache_path))
 
     # ── Controls ──────────────────────────────────────────────────────────────
-    token_meta = cache.get("token_meta", {})
+    token_meta = dict(cache.get("token_meta", {}))  # mutable copy
+
+    # Build a combined "micro_events" field from individual per-token event fields
+    # so users can see all sleep micro-events on a single colour axis.
+    _MICRO_EVENT_FIELDS = ["spindle", "slow_wave", "eye_movement", "arousal",
+                           "apnea_oa", "apnea_ca", "apnea_hypopnea", "desaturation"]
+    _avail_ev = [f for f in _MICRO_EVENT_FIELDS
+                 if f in token_meta and token_meta[f] is not None]
+    if _avail_ev:
+        n_tok_total = len(next(iter(token_meta.values())))
+        micro = []
+        for i in range(n_tok_total):
+            active = [f for f in _avail_ev if str(token_meta[f][i]) == "1"]
+            micro.append(active[0] if len(active) == 1 else
+                         "multiple" if len(active) > 1 else "none")
+        token_meta["micro_events"] = np.array(micro, dtype=object)
+
+    # Fields covered by micro_events composite + raw integer duplicate
+    _HIDDEN_META_FIELDS = {
+        "sleep_stage",  # raw int — sleep_stage_name is cleaner
+        "spindle", "slow_wave", "eye_movement", "arousal",
+        "apnea_oa", "apnea_ca", "apnea_hypopnea", "desaturation", "respiratory",
+    }
+    _META_DISPLAY_NAMES: dict[str, str] = {
+        "sleep_stage_name": "Sleep stage",
+        "micro_events": "Micro events",
+        "age_group": "Age group",
+        "gender": "Gender",
+        "race": "Race",
+        "osa_severity": "OSA severity",
+        "ahi_a0h3a": "AHI",
+        "mesa_site": "MESA site",
+        "sleep_medication": "Sleep medication",
+        "arousal_index_group": "Arousal index",
+        "spindle_density_group": "Spindle density",
+        "slow_wave_density_group": "Slow-wave density",
+        "subject_id": "Subject ID",
+        "Label": "Label",
+        "Band": "Band",
+        "Subject": "Subject",
+        "Cluster": "Cluster",
+    }
+
     meta_fields = [k for k, v in token_meta.items()
-                   if v is not None and len(np.unique(v)) > 1]
+                   if v is not None and len(np.unique(v)) > 1
+                   and k not in _HIDDEN_META_FIELDS]
     has_kmeans = bool(cache.get("kmeans")) and -1 in cache.get("layers", [])
+    has_perlayer = "xy_perlayer" in cache
+    has_lda = "xy_lda" in cache
+
+    # Projection mode toggle (only shown when extra projections are available)
+    if has_perlayer or has_lda:
+        mode_options = ["Joint (trajectory)"]
+        if has_perlayer:
+            mode_options.append("Per-layer (structure)")
+        if has_lda:
+            mode_options.append("LDA (sleep stage)")
+        umap_mode = st.radio(
+            "Projection mode",
+            options=mode_options,
+            index=0,
+            horizontal=True,
+            key="layer_explorer_umap_mode",
+            help=(
+                "**Joint**: one UMAP fit across all layers — consistent coordinates, "
+                "smooth animation, but within-layer structure averaged out.  "
+                "**Per-layer**: independent UMAP per layer — each frame shows that "
+                "layer's own geometry.  "
+                "**LDA**: projects onto the top-2 Linear Discriminant directions for "
+                "sleep stage — directly shows what a linear probe sees; if stages are "
+                "linearly separable they will cluster visibly here."
+            ),
+        )
+        use_perlayer = umap_mode == "Per-layer (structure)"
+        use_lda = umap_mode == "LDA (sleep stage)"
+        cache = dict(cache)  # shallow copy so we can swap xy safely
+        if use_perlayer:
+            cache["xy"] = cache["xy_perlayer"]
+        elif use_lda:
+            cache["xy"] = cache["xy_lda"]
+    else:
+        use_perlayer = False
+        use_lda = False
 
     color_options = (["Cluster"] if has_kmeans else []) + ["Band", "Label", "Subject"] + meta_fields
+
+    # For MESA caches that carry sleep_stage_name, default to that field so the
+    # plot is immediately meaningful without manual dropdown selection.
+    _default_color = (
+        "sleep_stage_name" if "sleep_stage_name" in color_options
+        else ("Label" if "Label" in color_options else color_options[0])
+    )
 
     col_cb, col_hl, col_info = st.columns([2, 2, 2])
     with col_cb:
         color_by = st.selectbox(
             "Color by",
             options=color_options,
-            index=color_options.index("Label") if "Label" in color_options else 0,
+            index=color_options.index(_default_color),
             key="layer_explorer_color_by",
+            format_func=lambda x: _META_DISPLAY_NAMES.get(
+                x, x.replace("_", " ").title()
+            ),
         )
     with col_hl:
         if color_by == "Cluster" and has_kmeans:
@@ -3153,6 +2803,22 @@ def page_layer_explorer(folder_name: str) -> None:
             names_dict = _GRAN_LABEL_NAMES if max_label > 1 else _LABEL_NAMES
             k_clusters = len([v for v in sorted(set(int(l) for l in cache["label"])) if v in names_dict])
             _cat_vals = [names_dict[v] for v in sorted(set(int(l) for l in cache["label"])) if v in names_dict]
+        elif color_by == "sleep_stage_name" and "sleep_stage_name" in token_meta:
+            k_clusters = 5
+            _raw = token_meta["sleep_stage_name"]
+            _present = set(str(v) for v in _raw if str(v) != "")
+            _cat_vals = [s for s in _SLEEP_STAGE_ORDER if s in _present]
+        elif color_by == "micro_events" and "micro_events" in token_meta:
+            _EV_ORDER_HL = ["spindle", "slow_wave", "eye_movement", "arousal",
+                            "apnea_oa", "apnea_ca", "apnea_hypopnea", "desaturation",
+                            "multiple", "none"]
+            _present_ev = set(str(v) for v in token_meta["micro_events"] if str(v) != "")
+            k_clusters = len(_present_ev)
+            _cat_vals = [e for e in _EV_ORDER_HL if e in _present_ev]
+        elif color_by == "ahi_a0h3a" and "ahi_a0h3a" in token_meta:
+            _present_ahi = {_ahi_category(v) for v in token_meta["ahi_a0h3a"]}
+            _cat_vals = [c for c in _AHI_ORDER if c in _present_ahi]
+            k_clusters = len(_cat_vals)
         elif color_by in token_meta:
             k_clusters = 6
             _raw = token_meta[color_by]
@@ -3181,7 +2847,13 @@ def page_layer_explorer(folder_name: str) -> None:
     with col_info:
         n_tok  = cache["n_tokens"]
         layers = cache["layers"]
-        layer_range = f"Tokenizer – Layer {layers[-1]}" if -1 in layers else f"{layers[0]}–{layers[-1]}"
+        _ll = cache.get("layer_labels", {})
+        if _ll:
+            layer_range = f"{_ll.get(layers[0], str(layers[0]))} – {_ll.get(layers[-1], str(layers[-1]))}"
+        elif -1 in layers:
+            layer_range = f"Tokenizer – Layer {layers[-1]}"
+        else:
+            layer_range = f"{layers[0]}–{layers[-1]}"
         st.markdown(
             f"**{n_tok:,}** tokens &nbsp;·&nbsp; "
             f"**{len(layers)}** steps ({layer_range}) &nbsp;·&nbsp; "
@@ -3198,8 +2870,14 @@ def page_layer_explorer(folder_name: str) -> None:
         _hl_val = highlight
 
     # ── Animated figure ───────────────────────────────────────────────────────
-    fig = _make_animation_figure(cache, color_by, token_meta=token_meta_fig, highlight=_hl_val)
-    st.plotly_chart(fig, use_container_width=True)
+    if use_lda:
+        _umap_label = "LDA (sleep stage)"
+    elif use_perlayer:
+        _umap_label = "Per-layer UMAP"
+    else:
+        _umap_label = "Joint UMAP"
+    fig = _make_animation_figure(cache, color_by, token_meta=token_meta_fig, highlight=_hl_val, umap_label=_umap_label)
+    st.plotly_chart(fig, width="stretch")
 
     # ── Band distribution summary ─────────────────────────────────────────────
     with st.expander("Band distribution"):
@@ -3423,7 +3101,7 @@ def page_attention_explorer(
                    f"label={int(top_labels[feat_idx, rank])})",
         title_font=dict(size=13),
     )
-    st.plotly_chart(fig_eeg, use_container_width=True)
+    st.plotly_chart(fig_eeg, width="stretch")
 
     # ── Top patches by activation × attention ─────────────────────────
     if has_attn and attn_mat is not None:
@@ -3507,7 +3185,7 @@ def page_attention_explorer(
             height=max(600, n_ch_display * 22) + 60,
             margin=dict(l=70, r=10, t=60, b=20),
         )
-        st.plotly_chart(fig_top, use_container_width=True)
+        st.plotly_chart(fig_top, width="stretch")
 
         score_cols = st.columns(n_top_patches)
         for col_i, tok_i in enumerate(top_tok_idx):
@@ -3545,7 +3223,7 @@ def page_attention_explorer(
         yaxis_title="Query token (time →)",
         margin=dict(l=60, r=40, t=50, b=50),
     )
-    st.plotly_chart(fig_mean, use_container_width=True)
+    st.plotly_chart(fig_mean, width="stretch")
 
     # Per-head attention heatmaps
     if show_heads and n_heads > 0:
@@ -3578,7 +3256,7 @@ def page_attention_explorer(
                 margin=dict(l=20, r=20, t=40, b=20),
                 showlegend=False,
             )
-            st.plotly_chart(fig_heads, use_container_width=True)
+            st.plotly_chart(fig_heads, width="stretch")
 
 
 
@@ -3586,9 +3264,9 @@ def page_attention_explorer(
 # Concept Steering
 # ─────────────────────────────────────────────────────────────────────────────
 
-@st.cache_resource(show_spinner="Loading SAE weights …")
+@st.cache_resource(show_spinner="Loading SAE weights …", max_entries=4)
 def _load_sae_for_steering(sae_path: str):
-    """Load only the SAE weights needed for concept steering (no spectral decoder)."""
+    """Load only the SAE weights needed for concept steering (no SpectralDecoder)."""
     from mecheeg.sae import SparseAutoencoder
 
     ckpt = torch.load(sae_path, map_location="cpu", weights_only=False)
@@ -3640,219 +3318,21 @@ def _concept_direction(
     return d, d.norm()
 
 
-_STEERING_FIG_DIR = Path("paper/concept_steering_figures")
-
-_TAXONOMY_COLORS = {
-    "separable": "#74c476",
-    "entangled": "#fd8d3c",
-    "null":      "#9e9e9e",
-}
-
-_CONCEPT_GROUPS: List[Dict[str, Any]] = [
-    {
-        "title": "Age: 0–3 → 50+",
-        "feats": "75",
-        "taxonomy": "entangled",
-        "result": "Clean in both normal and abnormal EEG — δ drops fully, abnormal lands in adult-abnormal band",
-        "note": "Age features encode maturation δ/θ shared with pathological slowing. "
-                "Both conditions steer into their respective adult reference bands.",
-        "figures": [
-            ("Normal EEG", "concept_steering_spectral_decoder_age_normal.png"),
-            ("Abnormal EEG", "concept_steering_spectral_decoder_age_abnormal.png"),
-        ],
-    },
-    {
-        "title": "Classification: All Abnormal → Normal",
-        "feats": "128 (TCAV)",
-        "taxonomy": "entangled",
-        "result": "Strong — δ drops, α emerges",
-        "note": "TCAV captures the shared δ/θ subspace. "
-                "Both age and pathology features load on the same primitive.",
-        "figures": [
-            ("All ages", "concept_steering_spectral_decoder_classification_all.png"),
-        ],
-    },
-    {
-        "title": "Classification: Adult Abnormal → Adult Normal",
-        "feats": "128 (TCAV)",
-        "taxonomy": "separable",
-        "result": "Clean removal",
-        "note": "Adult pathological δ is not entangled with developmental δ — "
-                "steering is clean with little residual.",
-        "figures": [
-            ("Adult (20+)", "concept_steering_spectral_decoder_classification_adult_all.png"),
-        ],
-    },
-    {
-        "title": "Classification: Child Abnormal → Child Normal",
-        "feats": "128 (TCAV)",
-        "taxonomy": "entangled",
-        "result": "Partial — residual δ above child-normal ref",
-        "note": "Developmental δ cannot be fully removed via pathology features — "
-                "the same neural primitive underlies both maturation and pathological slowing.",
-        "figures": [
-            ("Child (0–19)", "concept_steering_spectral_decoder_classification_child_all.png"),
-        ],
-    },
-    {
-        "title": "Epileptiform → Normal  /  Other Abnormal → Normal",
-        "feats": "128 (TCAV)",
-        "taxonomy": "entangled",
-        "result": "Strong — same signature as all-abnormal for both subtypes",
-        "note": "Epileptiform and other-abnormal share the same δ/θ SAE representation at layer 2.",
-        "figures": [
-            ("Epileptiform → Normal", "concept_steering_spectral_decoder_classification_epileptiform_all.png"),
-            ("Other Abnormal → Normal", "concept_steering_spectral_decoder_classification_other_abnormal_all.png"),
-        ],
-    },
-    {
-        "title": "Epileptiform → Other Abnormal",
-        "feats": "0",
-        "taxonomy": "null",
-        "result": "Null — zero enriched features",
-        "note": "No SAE features significantly discriminate the two pathology subtypes. "
-                "Both share the same δ/θ representation — the encoder has not learned "
-                "epileptiform-specific morphology (spikes, ictal dynamics) as a separable dimension.",
-        "figures": [
-            ("Epileptiform vs Other", "concept_steering_spectral_decoder_classification_epileptiform_vs_other_all.png"),
-        ],
-    },
-    {
-        "title": "Pediatric Classification (age-matched)",
-        "feats": "128 (TCAV)",
-        "taxonomy": "entangled",
-        "result": "Partial — more residual δ than adult equivalent",
-        "note": "Age-matched reference (child abnormal → child normal) isolates pathological excess "
-                "above the developmental baseline. Greater residual than adult confirms deeper "
-                "age/pathology entanglement in the pediatric population.",
-        "figures": [
-            ("Child abn → child norm", "concept_steering_spectral_decoder_classification_pediatric_all.png"),
-        ],
-    },
-    {
-        "title": "Gender: F → M",
-        "feats": "32",
-        "taxonomy": "separable",
-        "result": "Null — near-zero effect in both normal and abnormal EEG",
-        "note": "Negative control. EEG spectral content does not meaningfully differ by sex. "
-                "Validates method specificity — the approach only produces a signal when a "
-                "genuine biological concept is encoded.",
-        "figures": [
-            ("Normal EEG", "concept_steering_spectral_decoder_gender_normal.png"),
-            ("Abnormal EEG", "concept_steering_spectral_decoder_gender_abnormal.png"),
-        ],
-    },
-    {
-        "title": "Medication: ASM → None",
-        "feats": "30",
-        "taxonomy": "entangled",
-        "result": "Weak — confounded by underlying diagnosis",
-        "note": "The ASM spectral signature (θ/α slowing) disappears when controlling for "
-                "pathology status, confirming the enrichment captures diagnosis rather than "
-                "medication per se.",
-        "figures": [
-            ("Normal EEG", "concept_steering_spectral_decoder_medication_asm_normal.png"),
-            ("Abnormal EEG", "concept_steering_spectral_decoder_medication_asm_abnormal.png"),
-        ],
-    },
-    {
-        "title": "Medication: Psychiatric → None",
-        "feats": "17",
-        "taxonomy": "separable",
-        "result": "Moderate — β/γ suppression (opposite direction to ASM)",
-        "note": "The SAE separates two pharmacologically distinct classes with opposite "
-                "spectral signatures: ASM → θ/α slowing; psychiatric → β/γ increase. "
-                "Psychiatric effect persists in normal EEGs (not confounded by pathology).",
-        "figures": [
-            ("Normal EEG", "concept_steering_spectral_decoder_medication_psych_normal.png"),
-        ],
-    },
-]
-
-
-def _taxonomy_badge(taxonomy: str) -> str:
-    color = _TAXONOMY_COLORS.get(taxonomy, "#9e9e9e")
-    labels = {
-        "separable": "Separable-monosemantic",
-        "entangled":  "Entangled-monosemantic",
-        "null":       "Null result",
-    }
-    label = labels.get(taxonomy, taxonomy)
-    return (
-        f'<span style="background:{color};color:#111;padding:2px 8px;'
-        f'border-radius:4px;font-size:0.8em;font-weight:600">{label}</span>'
-    )
-
-
-def _render_steering_gallery() -> None:
-    st.markdown(
-        "SAE concept steering replaces source-group feature activations with the target-group "
-        "centroid in SAE space, then decodes via the spectral decoder to obtain an amplitude spectrum. "
-        "Results classify into a three-way taxonomy:"
-    )
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(
-            f'{_taxonomy_badge("separable")}  \nOne concept, clean spectral shift, no residual.',
-            unsafe_allow_html=True,
-        )
-    with c2:
-        st.markdown(
-            f'{_taxonomy_badge("entangled")}  \nMultiple clinical labels sharing one neural primitive.',
-            unsafe_allow_html=True,
-        )
-    with c3:
-        st.markdown(
-            f'{_taxonomy_badge("null")}  \nZero enriched features — concepts indistinguishable at this layer.',
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("---")
-
-    for concept in _CONCEPT_GROUPS:
-        tax = concept["taxonomy"]
-        color = _TAXONOMY_COLORS.get(tax, "#9e9e9e")
-        st.markdown(
-            f"#### {concept['title']} &nbsp; {_taxonomy_badge(tax)}",
-            unsafe_allow_html=True,
-        )
-        st.caption(f"**{concept['feats']}** enriched features · {concept['result']}")
-
-        figs = concept["figures"]
-        cols = st.columns(len(figs))
-        for col, (label, fname) in zip(cols, figs):
-            path = _STEERING_FIG_DIR / fname
-            with col:
-                if path.exists():
-                    st.image(str(path), caption=label, use_container_width=True)
-                else:
-                    st.caption(f"*(figure not found: {fname})*")
-
-        st.markdown(
-            f'<div style="border-left:3px solid {color};padding:6px 12px;'
-            f'margin:4px 0 16px 0;color:#ccc;font-size:0.9em">{concept["note"]}</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown("---")
-
-
 def page_concept_steering(
     app_cache: Optional[dict], sae_path: str, folder_name: str, layer: int
 ) -> None:
     st.title("Concept Steering")
-    st.caption("**Paper §5, §6 · Figures 4 / 5 / 6** — clamping concept-aligned features to the target centroid.")
-
-    tab_gallery, tab_interactive = st.tabs(["Results Gallery", "Interactive Clamping"])
-
-    with tab_gallery:
-        _render_steering_gallery()
-
-    with tab_interactive:
-        st.caption(
-            "Zero out the SAE features that encode a demographic concept — "
-            "does the concept become undecodable?"
+    st.caption(
+        "**§3.5, Fig. 6.** Clamp the SAE features most aligned with a concept to the "
+        "target group's values, then check whether a probe can still read the concept."
+    )
+    with st.expander("Paper result: Figure 6, spectrum-level steering"):
+        _show_paper_image(
+            "fig6_spectral.png",
+            "Abnormal → normal on SleepFM L3 (E=8, k=64). "
+            "Clamping the top n = 104 and 164 features suppresses δ/θ and restores the α peak.",
         )
-        _page_concept_steering_interactive(app_cache, sae_path)
+    _page_concept_steering_interactive(app_cache, sae_path)
 
 
 def _page_concept_steering_interactive(
@@ -3953,7 +3433,7 @@ def _page_concept_steering_interactive(
             "Dom. band": dom_band,
         })
     import pandas as pd
-    st.dataframe(pd.DataFrame(tbl_rows), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(tbl_rows), width="stretch", hide_index=True)
 
     # ── Token selection ───────────────────────────────────────────────────────
     centroids_emb: Optional[torch.Tensor] = app_cache.get("codebook_centroids_emb")
@@ -4087,7 +3567,7 @@ def _page_concept_steering_interactive(
                 font=dict(color="#fafafa", size=11),
                 margin=dict(t=50, b=40, l=55, r=20), bargap=0.4,
             )
-            st.plotly_chart(fig_probe, use_container_width=True)
+            st.plotly_chart(fig_probe, width="stretch")
             st.caption(
                 f"Enriched features clamped in **all** tokens (scale 1→0.5→0), probe retrained. "
                 f"AUROC drop = those features were the discriminative dimensions; "
@@ -4131,7 +3611,7 @@ def _page_concept_steering_interactive(
         font=dict(color="#fafafa", size=11),
         legend=dict(orientation="h", y=1.12),
     )
-    st.plotly_chart(fig_diff, use_container_width=True)
+    st.plotly_chart(fig_diff, width="stretch")
 
 
 def main():

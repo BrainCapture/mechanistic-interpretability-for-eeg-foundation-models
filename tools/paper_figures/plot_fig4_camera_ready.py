@@ -116,10 +116,12 @@ def main():
         for sx in seps:
             ax.axvline(sx, color="black", lw=0.4, alpha=0.12, zorder=1)
     ax_top.set_ylim(0.5, 1.0)
-    for thr, lbl, col in [(0.85, "strong", "#1f7a3a"), (0.70, "moderate", "#b8860b")]:
+    # lift (pt): the moderate label would otherwise sit on the REVE L22 / ASM bar (0.72)
+    for thr, lbl, col, lift in [(0.85, "strong", "#1f7a3a", 0), (0.70, "moderate", "#b8860b", 9)]:
         ax_top.axhline(thr, color=col, lw=0.6, ls=(0, (4, 3)), alpha=0.55, zorder=2)
-        ax_top.text(0.998, thr, rf" {lbl} $\geq$ {thr:.2f}", transform=ax_top.get_yaxis_transform(),
-                    ha="right", va="bottom", fontsize=18, color=col, style="italic", weight="bold")
+        ax_top.annotate(rf" {lbl} $\geq$ {thr:.2f}", xy=(0.998, thr), xycoords=ax_top.get_yaxis_transform(),
+                        xytext=(0, lift), textcoords="offset points", ha="right", va="bottom",
+                        fontsize=18, color=col, style="italic", weight="bold", zorder=5)
     ax_sel.set_xticks([])
     for xc, name in centres:
         ax_sel.text(xc, -0.04, name, transform=ax_sel.get_xaxis_transform(), ha="center", va="top",
@@ -129,20 +131,23 @@ def main():
     ax_top.set_ylabel("Encoding strength", fontsize=18)
     ax_top.set_title("Concept encoding and steering selectivity across encoder layers", fontsize=26, pad=14)
 
-    rows = max(len(l) for _, l, _, _ in FAMILIES)
-    handles, labels = [], []
-    for fam, layers, _, _ in FAMILIES:
-        for li, L in enumerate(layers):
-            handles.append(Patch(facecolor=ramps[fam][li][:3], edgecolor="black", linewidth=0.8))
-            labels.append(f"{fam} L{L + 1}")
-        for _ in range(rows - len(layers)):
-            handles.append(Patch(facecolor="none", edgecolor="none")); labels.append("")
-    leg = ax_sel.legend(handles, labels, fontsize=12, loc="upper center", bbox_to_anchor=(0.5, -0.14),
-                        frameon=False, ncol=len(FAMILIES) * 2 + 1,
-                        columnspacing=1.2, handlelength=1.1, handleheight=1.0, labelspacing=0.35,
-                        borderpad=0.6)
-
+    # one legend per family, each in a single row centred under its share of the bars
     fig.subplots_adjust(bottom=0.24, left=0.07, right=0.98, top=0.92)
+    pos = ax_sel.get_position()
+    n_tot = sum(len(lays) for _, lays, _, _ in FAMILIES)
+    seen = 0
+    for fam, layers, _, _ in FAMILIES:
+        handles = [Patch(facecolor=ramps[fam][li][:3], edgecolor="black", linewidth=0.8)
+                   for li in range(len(layers))]
+        labels = [f"L{L + 1}" for L in layers]
+        xc = (seen + len(layers) / 2) / n_tot
+        seen += len(layers)
+        leg = fig.legend(handles, labels, title=fam, fontsize=16, title_fontsize=18, loc="upper center",
+                         bbox_to_anchor=(pos.x0 + xc * pos.width, pos.y0 - 0.075), frameon=False,
+                         ncol=len(layers), columnspacing=1.6, handlelength=1.6, handleheight=1.2,
+                         handletextpad=0.5, borderpad=0.3)
+        leg.get_title().set_fontweight("bold")
+
     OUT.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUT / f"{STEM}.png", dpi=300, bbox_inches="tight")
     fig.savefig(OUT / f"{STEM}.pdf", bbox_inches="tight")

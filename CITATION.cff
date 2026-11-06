@@ -52,7 +52,7 @@ authors:
     affiliation: "DTU Compute, Technical University of Denmark"
 type: software
 license: "LicenseRef-PolyForm-Noncommercial-1.0.0"
-version: 1.1.0
+version: 1.2.0
 preferred-citation:
   type: conference-paper
   title: "Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders"

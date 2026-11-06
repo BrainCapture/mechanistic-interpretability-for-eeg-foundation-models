@@ -10,4 +10,4 @@ enableWebsocketCompression = false
 gatherUsageStats = false
 
 [runner]
-fastReruns = false
+fastReruns = true
