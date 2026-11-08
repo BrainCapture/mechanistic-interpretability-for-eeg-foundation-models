@@ -380,7 +380,18 @@ def load_tcav_cache(path: str) -> dict:
 
 @st.cache_resource(show_spinner="Loading attention cache …", max_entries=3)
 def load_attention_cache(path: str) -> dict:
-    return torch.load(path, weights_only=False, map_location="cpu")
+    cache = torch.load(path, weights_only=False, map_location="cpu")
+    # Published caches store the per-window SAE activations top-k sparse
+    # (idx/val of shape (n_windows, S, k)); the pages index a dense
+    # (n_windows, S, n_features) tensor. Densify once here (≤ ~60 MB fp16).
+    if "windows_feat_acts" not in cache and "windows_feat_acts_sparse_idx" in cache:
+        idx = cache["windows_feat_acts_sparse_idx"].long()
+        val = cache["windows_feat_acts_sparse_val"]
+        n_feat = int(cache["windows_feat_acts_n_features"])
+        dense = torch.zeros(*idx.shape[:2], n_feat, dtype=val.dtype)
+        dense.scatter_(2, idx, val)
+        cache["windows_feat_acts"] = dense
+    return cache
 
 
 @st.cache_resource(show_spinner="Loading layer UMAP cache …", max_entries=3)
@@ -426,10 +437,10 @@ _ENC_LABELS = {"sleepfm": "SleepFM", "labram": "LaBraM", "reve": "REVE"}
 _ENC_ORDER  = ["sleepfm", "labram", "reve"]
 _PAGES = [
     "Home",
+    "Taxonomy & Steering",
     "Feature Explorer",
     "TCAV Explorer",
     "Concept Steering",
-    "Taxonomy & Steering",
     "Layer Explorer",
     "Attention Explorer",
 ]
@@ -466,6 +477,49 @@ def _paper_runs() -> Tuple[Dict[str, Dict[int, Dict[Tuple[float, int], Tuple[str
     return out, version
 
 
+_QP_ENC = {"sleepfm": "SleepFM", "labram": "LaBraM", "reve": "REVE"}
+_QP_PAGE = {
+    "home": "Home", "features": "Feature Explorer", "tcav": "TCAV Explorer",
+    "steering": "Concept Steering", "taxonomy": "Taxonomy & Steering",
+    "layers": "Layer Explorer", "attention": "Attention Explorer",
+}
+
+
+def _seed_from_url(runs: dict) -> None:
+    """Permalinks: seed the sidebar once per session from the URL, e.g.
+    `?model=reve&layer=22&page=tcav` (layers 1-based, as in the paper;
+    `dict=e8k64` picks the sparsity-matched dictionary). Invalid values are
+    ignored so a stale link falls back to the defaults."""
+    if st.session_state.get("_qp_seeded"):
+        return
+    st.session_state["_qp_seeded"] = True
+    qp = st.query_params
+    enc = qp.get("model")
+    if enc not in runs:
+        return
+    st.session_state["enc_pills"] = _QP_ENC[enc]
+    try:
+        L = int(qp.get("layer", "")) - 1
+    except ValueError:
+        L = None
+    if L in runs[enc]:
+        st.session_state[f"layer_sel_{enc}"] = L
+        if qp.get("dict") == "e8k64" and (8.0, 64) in runs[enc][L]:
+            st.session_state["dict_sel"] = (8.0, 64)
+    if qp.get("page") in _QP_PAGE:
+        st.session_state["page_nav"] = _QP_PAGE[qp["page"]]
+
+
+def _sync_url(encoder: str, layer: int, E_k: Tuple[float, int], page: str) -> None:
+    """Mirror the sidebar state into the URL so any view can be shared."""
+    page_slug = {v: k for k, v in _QP_PAGE.items()}[page]
+    want = {"model": encoder, "layer": str(layer + 1), "page": page_slug}
+    if E_k != (1.0, 8):
+        want["dict"] = f"e{int(E_k[0])}k{E_k[1]}"
+    if dict(st.query_params) != want:
+        st.query_params.from_dict(want)
+
+
 def sidebar():
     st.sidebar.markdown(
         "### Mechanistic Interpretability of EEG Foundation Models\n"
@@ -477,6 +531,7 @@ def sidebar():
     if not runs:
         st.sidebar.error("No SAE checkpoints with an app cache found under results/.")
         st.stop()
+    _seed_from_url(runs)
 
     enc_keys = [e for e in _ENC_ORDER if e in runs]
     enc_display = [_ENC_LABELS[e] for e in enc_keys]
@@ -510,6 +565,7 @@ def sidebar():
 
     st.sidebar.divider()
     page = st.sidebar.radio("Page", _PAGES, label_visibility="collapsed", key="page_nav")
+    _sync_url(encoder, layer, E_k, page)
 
     st.sidebar.divider()
     st.sidebar.caption(
@@ -543,6 +599,9 @@ _PAPER_URL = (
 _CODE_URL = "https://github.com/BrainCapture/mechanistic-interpretability-for-eeg-foundation-models"
 
 _HOME_PAGES = [
+    ("Taxonomy & Steering", "§4.3–4.4 · Figs. 3–5",
+     "Start here: the paper's taxonomy and selectivity results, with every steering curve explorable.",
+     "taxonomy_steering"),
     ("Feature Explorer",    "§3.2–3.3 · Stages I–II",
      "Browse every SAE feature: its spectral signature, firing statistics and top-activating EEG.",
      "feature_explorer"),
@@ -552,9 +611,6 @@ _HOME_PAGES = [
     ("Concept Steering",    "§3.5 · Fig. 6",
      "Clamp concept-aligned features to a target group and watch the decoded spectrum move.",
      "concept_steering"),
-    ("Taxonomy & Steering", "§4.3–4.4 · Figs. 3–5",
-     "The paper's taxonomy and selectivity results, with every steering curve explorable.",
-     "taxonomy_steering"),
     ("Layer Explorer",      "supplementary",
      "Animated UMAP of the same tokens as they move through the encoder's layers.",
      "layer_explorer"),
@@ -1378,7 +1434,8 @@ def page_tcav_explorer(
     # Primary ranking metric for heatmap / band section: delta_rate
     tcav_scores_mat = delta_rates   # (C, n_features)
 
-    band_concept_names = [n for n in concept_names if n != "abnormal"]
+    # EEG-band concepts only (caches also carry metadata concepts: child, asm, seizure, …)
+    band_concept_names = [n for n in concept_names if n in CLINICAL_BANDS]
     has_abnormal = "abnormal" in concept_names
     ab_idx       = concept_names.index("abnormal") if has_abnormal else None
     ab_valid     = (
@@ -1393,9 +1450,8 @@ def page_tcav_explorer(
     if band_indices:
         band_scores_sub = tcav_scores_mat[band_indices, :]   # (n_bands, n_features)
         dominant_band_idx = np.argmax(band_scores_sub, axis=0)
-        valid_bands = [band_concept_names[i]
-                       for i in [concept_names.index(b) for b in band_concept_names
-                                 if not np.isnan(cav_accs[concept_names.index(b)])]]
+        valid_bands = [b for b in band_concept_names
+                       if not np.isnan(cav_accs[concept_names.index(b)])]
         feature_dominant_band = [valid_bands[dominant_band_idx[i]] for i in range(n_features)]
     else:
         feature_dominant_band = ["unknown"] * n_features
@@ -1923,13 +1979,19 @@ def _ahi_category(value: Any) -> str:
     return "Severe (≥30)"
 
 
-@st.cache_data(show_spinner=False, hash_funcs={dict: id})
+@st.cache_resource(show_spinner="Building layer animation …", max_entries=12)
 def _make_animation_figure(
-    cache: dict, color_by: str, token_meta: Optional[Dict[str, Any]] = None,
+    fig_key: Tuple, _cache: dict, color_by: str, _token_meta: Optional[Dict[str, Any]] = None,
     highlight: Optional[str] = None,
     umap_label: str = "Joint UMAP",
 ) -> go.Figure:
-    """Build a Plotly animated scatter — one frame per encoder layer."""
+    """Build a Plotly animated scatter — one frame per encoder layer.
+
+    Cached on (fig_key, color_by, highlight, umap_label); `fig_key` names the
+    UMAP cache file and k-means k, so the large `_cache` / `_token_meta`
+    objects are not hashed. Building a REVE figure takes ~12 s.
+    """
+    cache, token_meta = _cache, _token_meta
     layers  = cache["layers"]
     band    = cache["band"]     # (N,) dtype=object
     label   = cache["label"]   # (N,) int32
@@ -2386,7 +2448,7 @@ def _render_tokenizer_clusters(cache: dict, k: int) -> None:
                     _ann.font = dict(size=10, color="#aaaaaa")
                     _ann.x = 0
                     _ann.xanchor = "left"
-                st.plotly_chart(_fig_meta, width="stretch", config={"displayModeBar": False})
+                st.plotly_chart(_fig_meta, width="stretch", config={"displayModeBar": False}, key=f"tok_meta_{k}_{ci}")
 
         with col_wave:
             idxs = np.where(mask)[0]
@@ -2431,7 +2493,7 @@ def _render_tokenizer_clusters(cache: dict, k: int) -> None:
                 font=dict(color="#fafafa"),
                 showlegend=False,
             )
-            st.plotly_chart(fig_w, width="stretch")
+            st.plotly_chart(fig_w, width="stretch", key=f"tok_wave_{k}_{ci}")
         st.divider()
 
 
@@ -2729,6 +2791,8 @@ def page_layer_explorer(folder_name: str) -> None:
                    if v is not None and len(np.unique(v)) > 1
                    and k not in _HIDDEN_META_FIELDS]
     has_kmeans = bool(cache.get("kmeans")) and -1 in cache.get("layers", [])
+    _km_ks = sorted(cache["kmeans"]) if has_kmeans else []
+    km_k = 6 if 6 in _km_ks else (_km_ks[0] if _km_ks else None)
     has_perlayer = "xy_perlayer" in cache
     has_lda = "xy_lda" in cache
 
@@ -2794,6 +2858,7 @@ def page_layer_explorer(folder_name: str) -> None:
                 min_value=min(available_ks), max_value=max(available_ks),
                 value=6, step=1, key="layer_explorer_k",
             )
+            km_k = k_clusters
             _cat_vals = [f"Cluster {i}" for i in range(k_clusters)]
         elif color_by == "Band":
             k_clusters = 6
@@ -2863,7 +2928,7 @@ def page_layer_explorer(folder_name: str) -> None:
     # Inject cluster labels into token_meta for the figure builder
     if color_by == "Cluster" and has_kmeans:
         token_meta_fig = dict(token_meta)
-        token_meta_fig["_cluster_labels"] = cache["kmeans"][k_clusters]["labels"]
+        token_meta_fig["_cluster_labels"] = cache["kmeans"][km_k]["labels"]
         _hl_val = highlight.replace("Cluster ", "") if highlight != "All" else "All"
     else:
         token_meta_fig = token_meta
@@ -2876,7 +2941,9 @@ def page_layer_explorer(folder_name: str) -> None:
         _umap_label = "Per-layer UMAP"
     else:
         _umap_label = "Joint UMAP"
-    fig = _make_animation_figure(cache, color_by, token_meta=token_meta_fig, highlight=_hl_val, umap_label=_umap_label)
+    _fig_key = (str(cache_path), km_k if color_by == "Cluster" else None)
+    fig = _make_animation_figure(_fig_key, cache, color_by, _token_meta=token_meta_fig,
+                                 highlight=_hl_val, umap_label=_umap_label)
     st.plotly_chart(fig, width="stretch")
 
     # ── Band distribution summary ─────────────────────────────────────────────
@@ -2898,7 +2965,7 @@ def page_layer_explorer(folder_name: str) -> None:
     # ── Tokenizer cluster analysis ────────────────────────────────────────────
     if has_kmeans and "file_indices" in cache:
         with st.expander("Tokenizer cluster analysis", expanded=(color_by == "Cluster")):
-            _render_tokenizer_clusters(cache, k_clusters)
+            _render_tokenizer_clusters(cache, km_k)
 
 
 
@@ -2945,8 +3012,8 @@ def page_attention_explorer(
             )
         else:
             st.info(
-                "Attention cache isn't built for this config. Attention Explorer is a "
-                "supplementary tab; the canonical view is on `sleepfm_finetuned_layer{0,1,2}`."
+                "Attention data is available for **SleepFM** only. Pick SleepFM in the "
+                "sidebar to explore its self-attention alongside the SAE features."
             )
         return
 
@@ -3379,6 +3446,13 @@ def _page_concept_steering_interactive(
         except ValueError:
             return (1, v)
     cats_sorted = sorted(cats, key=_cat_sort_key)
+    # Only offer categories the probe below can actually be fit on.
+    _pm = app_cache.get("codebook_umap_embeddings_meta") or app_cache.get("codebook_umap_meta") or {}
+    if _pm.get(field) is not None:
+        _counts: Dict[str, int] = {}
+        for v in _pm[field]:
+            _counts[str(v)] = _counts.get(str(v), 0) + 1
+        cats_sorted = [c for c in cats_sorted if _counts.get(c, 0) >= 10] or cats_sorted
 
     with col2:
         source_cat = st.selectbox("Concept to remove", cats_sorted)
@@ -3438,7 +3512,8 @@ def _page_concept_steering_interactive(
     # ── Token selection ───────────────────────────────────────────────────────
     centroids_emb: Optional[torch.Tensor] = app_cache.get("codebook_centroids_emb")
     if centroids_emb is None:
-        st.info("No codebook centroids in cache.")
+        st.info("Interactive clamping is available for the standard dictionaries (E=1, k=8). "
+                "Switch **Dictionary** in the sidebar to use it.")
         return
 
     centroids_norm = (centroids_emb.float() - act_mean) / (act_std + 1e-8)

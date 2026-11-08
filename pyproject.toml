@@ -1,6 +1,6 @@
 [project]
 name = "mecheeg"
-version = "1.2.0"
+version = "1.2.1"
 description = "Mechanistic Interpretability of EEG Foundation Models via Sparse Autoencoders (NeurIPS 2026)"
 readme = "README.md"
 requires-python = ">=3.12, <3.13"
